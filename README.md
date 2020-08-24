@@ -10,7 +10,7 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 <center><img height="526" alt="portfolio_view" src="media/design.png" /></center>
 
 
-## Dependencies
+## Dependencies: Database Server
 
 LocaleDB can be deployed to a development and production environments.  It is recommended to familiarize yourself with the software using the development environment first.
 
@@ -28,6 +28,12 @@ LocaleDB can be deployed to a development and production environments.  It is re
 - unzip
 
 **Note**: LocaleDB should not be deployed to a production environment yet.  This note will be removed when that deployment mode has been fully implemented and fully tested.
+
+
+## Dependencies: Python Package
+
+- [Python 3](https://www.python.org)
+- [psycopg2](https://pypi.org/project/psycopg2)
 
 
 ## Setup
