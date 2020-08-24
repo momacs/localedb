@@ -62,6 +62,8 @@ Alternatively, you can run the commands from the [`setup.sh`](setup.sh) script m
 It is never a bad idea to first create a new Python virtual environment:
 
 ```
+# sudo apt install python3-venv  # may be needed on Linux
+
 python3 -m venv ./prj01
 cd prj01
 source ./bin/activate
