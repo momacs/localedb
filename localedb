@@ -78,7 +78,7 @@ declare -r usage="Usage: $self_name $cmd"
 if [ $(command -v curl) ]; then
     declare -r cmd_dl="curl -sO"
 elif [ $(command -v wget) ]; then
-    declare -r cmd_dl="wget -qO"
+    declare -r cmd_dl="wget -q"
 fi
 
 if [ $is_prod == 1 ]; then
