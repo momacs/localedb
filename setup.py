@@ -13,7 +13,7 @@ setuptools.setup(
     packages=['localedb'],
     package_dir={'': 'src'},
     python_requires='>=3.6',
-    install_requires=['psycopg2'],
+    install_requires=['psycopg2-binary'],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
