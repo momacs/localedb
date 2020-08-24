@@ -34,12 +34,12 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 
 On MacOS run:
 
-```sh
+```
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/momacs/localedb/master/setup.sh -O -)"
 ```
 
 On Linux run:
-```sh
+```
 sh -c "$(wget https://raw.githubusercontent.com/momacs/localedb/master/setup.sh -O -)"
 ```
 
@@ -49,7 +49,7 @@ Alternatively, you can run the commands from the [`setup.sh`](setup.sh) script m
 
 ### Python Client Package
 
-```sh
+```
 pip install git+https://github.com/momacs/localedb.git
 ```
 
@@ -60,7 +60,7 @@ pip install git+https://github.com/momacs/localedb.git
 
 After setting up the command line management tool, setup the LocaleDB instance, start it, and display some info by running the following three commands:
 
-```sh
+```
 $ localedb setup
 $ localedb start
 $ localedb info
@@ -84,7 +84,7 @@ PostgreSQL server
 
 To see some basic database statistics (currently only record counts), run:
 
-```sh
+```
 $ localedb db stats
 geo
     st  0
@@ -104,7 +104,7 @@ pop
 
 To import geographic and cartographic data for the state of Alaska, run:
 
-```sh
+```
 $ localedb import geo AK
 US states        done
 US counties      done
@@ -116,7 +116,7 @@ Analyzing database... done
 
 To import synthetic population data, run:
 
-```sh
+```
 $ localedb import pop AK
 AK  done
 Analyzing database... done
@@ -124,7 +124,7 @@ Analyzing database... done
 
 Check the database statistics again:
 
-```sh
+```
 $ localedb db stats
 geo
     st  52
@@ -144,7 +144,7 @@ pop
 
 Imported states can be removed like so:
 
-```sh
+```
 localedb db rm state-geo AK
 localedb db rm state-pop AK
 
@@ -153,7 +153,7 @@ localedb db rm state AK  # remove all data types
 
 Once data has been imported and the downloaded data files are no longer needed, they can be removed like so:
 
-```sh
+```
 localedb fs rm-data geo
 localedb db rm-data pop
 
@@ -162,13 +162,13 @@ localedb db rm data-all  # remove all data files
 
 To stop LocaleDB instance, run:
 
-```sh
+```
 localedb stop
 ```
 
 To uninstall LocaleDB (leaving nothing behind), run:
 
-```sh
+```
 localedb uninstall
 ```
 
