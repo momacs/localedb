@@ -9,8 +9,8 @@ if [ -f $HOME/bin/localedb ]; then
 fi
 
 case "$(uname)" in
-    "Darwin") cmd="curl -fsSL $url -O -";;
-    "Linux")  cmd="wget       $url -O -";;
+    "Darwin") cmd="curl -SO $url";;
+    "Linux")  cmd="wget $url";;
     *) echo "Unsupported operating system." && exit 1;;
 esac
 
@@ -18,8 +18,7 @@ mkdir -p $HOME/bin
 cd $HOME/bin
 $cmd
 chmod a+x ./localedb
-
 cd $HOME
-! command -v localedb > /dev/null 2>&1 && echo 'export PATH=$PATH:$HOME\bin' >> .bashrc
+! command -v localedb > /dev/null 2>&1 && export PATH=$PATH:$HOME/bin && echo 'export PATH=$PATH:$HOME/bin' >> .bashrc
 
-echo "Command line interface installed. To see list of available commands, run: localedb"
+echo "Installation complete. To see list of available commands, run: localedb"
