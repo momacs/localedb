@@ -508,6 +508,7 @@ st_name2fips() { i=$(st_name2idx $1); echo "${st_fips[@]:$i:1}"; }
 # ----------------------------------------------------------------------------------------------------------------------
 ! is_cmd curl   && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
 ! is_cmd docker &&                  echo "Dependency unmet: docker"       && exit 1
+! is_cmd psql   &&                  echo "Dependency unmet: psql"         && exit 1
 
 
 # ----------------------------------------------------------------------------------------------------------------------
