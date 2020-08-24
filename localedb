@@ -352,8 +352,8 @@ db_analyze() {
 db_init() {
     [ "$1" != "1" ] && req_y "Reinitialize the database?"
     
-    PGPASSWORD=$pg_pwd dropdb   -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db
-    PGPASSWORD=$pg_pwd createdb -h $pg_host -p $pg_port -U $pg_usr             $pg_db
+    PGPASSWORD=$pg_pwd dropdb   -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db > /dev/null 2>&1
+    PGPASSWORD=$pg_pwd createdb -h $pg_host -p $pg_port -U $pg_usr             $pg_db > /dev/null 2>&1
     psql $pg_conn_str -q -c "CREATE EXTENSION IF NOT EXISTS postgis;"
     
     db_init_geo 1
