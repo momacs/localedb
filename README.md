@@ -1,6 +1,6 @@
 # LocaleDB
 
-A database of U.S. locales.  Currently, the database supports epidemiological modeling and is specifically tailored towards the COVID 19 pandemic.  Modeling in other disciplies may be supporeted in the future.
+A database of U.S. locales.  Currently, the database supports epidemiological modeling and simulation is specifically tailored towards the COVID 19 pandemic.  Modeling in other disciplies may be supporeted in the future.
 
 
 ## Design
@@ -9,7 +9,7 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 
 <center><img height="526" alt="portfolio_view" src="media/design.png" /></center>
 
-This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require few to no manual management.  It will then be used for producing data that will drive modeling and analysis efforts.
+This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require few to no manual management.  It will then be used for producing data that will drive modeling and simulation efforts.
 
 
 ## Dependencies: Database Server
@@ -19,11 +19,13 @@ LocaleDB can be deployed to a development and production environments.  It is re
 ### Development Environment
 
 - curl or wget
+- PostgreSQL client
 - [Docker](https://www.docker.com)
 
 ### Production Environment
 
 - curl or wget
+- PostgreSQL client
 - PostgreSQL server (with PostGIS extensions)
 - [Python 3](https://www.python.org)
 
@@ -48,7 +50,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/momacs/localedb/master/set
 
 On Linux run:
 ```
-sh -c "$(wget https://raw.githubusercontent.com/momacs/localedb/master/setup.sh -O -)"
+sh -c "$(wget -q https://raw.githubusercontent.com/momacs/localedb/master/setup.sh -O -)"
 ```
 
 Alternatively, you can run the commands from the [`setup.sh`](setup.sh) script manually.
