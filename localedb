@@ -20,38 +20,21 @@
 # Dependencies (development environment)
 #     curl or wget
 #     docker
+#     PostgreSQL client
 #
 # Dependencies (production environment)
 #     curl or wget
+#     PostgreSQL client
 #     PostgreSQL server (with PostGIS extensions)
 #     Python 3
 #
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # TODO
-#     Before hackathon
-#         Test on Ubuntu
-#         Create LocaleDB package functionality
-#         GitHub
-#             [ ] repo
-#             [ ] .gitignore
-#             [ ] requirements.txt
-#             [ ] setup.sh
-#             [ ] setup.py
-#             [ ] README.md
-#         Prepare other written instructions if necessary, e.g.:
-#             - How integration with Jataware will likely play out
-#         Prepare slides
-#             Motivation and vision
-#             Sugggested steps
-#             Deliverables
-#
-#     Later
-#         Implement fs_download_unzip() below
-#         Compose a Docker container with shp2pgsql and Python already inside
-#         Move most of the functionality from this script into the container
-#             This script then calls the inside script
-#             This might make it easier to support Windows (although there's a Linux WM there now anyway so not sure)
+#     Implement fs_download_unzip() below
+#     Compose a Docker container with shp2pgsql and Python already inside
+#     Move most of the functionality from this script into the container
+#         This will likely remove psql dependency on dev env
 #
 # ----------------------------------------------------------------------------------------------------------------------
 
