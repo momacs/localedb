@@ -386,13 +386,28 @@ db_init_pop() {
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# TODO
 #
-# $1: file URL
-# $2: dir
+# $1: dir
+# $2: file URL
 #
 fs_download_unzip() {
     return 0
+}
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
+# $1: dir
+# $2: file URL
+#
+fs_upd() {
+    local fname=$(basename $2)
+    
+    cd $1
+    rm -f ./${fname}.upd
+    mv ./$fname ./${fname}.upd
+    $cmd_dl $2
+    rm -f ./${fname}.upd
 }
 
 
@@ -739,12 +754,16 @@ case "$cmd" in
         [ $is_prod == 0 ] && docker stop $docker_cont > /dev/null
         ;;
     "update")
-        cd $HOME/bin
-        rm -f ./localedb-update.bak
-        mv ./localedb ./localedb-update.bak
-        $cmd_dl https://raw.githubusercontent.com/momacs/localedb/master/localedb
-        chmod a+x ./localedb
-        rm -f ./localedb-update.bak
+        #cd $HOME/bin
+        #rm -f ./localedb-update.bak
+        #mv ./localedb ./localedb-update.bak
+        #$cmd_dl https://raw.githubusercontent.com/momacs/localedb/master/localedb
+        #chmod a+x ./localedb
+        #rm -f ./localedb-update.bak
+        
+        fs_upd $HOME/bin https://raw.githubusercontent.com/momacs/localedb/master/localedb
+        fs_upd $dir_script https://raw.githubusercontent.com/momacs/localedb/master/localedb_man.py
+        chmod a+x $HOME/bin/localedb
         ;;
     "uninstall")
         req_y "This will remove all downloaded data and the contents of the '$pg_db' database. Continue?"
