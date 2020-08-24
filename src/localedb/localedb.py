@@ -46,13 +46,13 @@ class LocaleDB(object):
             c.execute(qry)
             return c.fetchall()
 
-    def get_pop(self):
+    def get_pop_size(self):
         return self._get_row_cnt('person_view')
 
-    def ls_geo_co(self, st_fips):
+    def ls_geo_counties(self, st_fips):
         return self.exec_get(f"SELECT gid, statefp10, countyfp10, geoid10, name10, namelsad10 FROM geo.co WHERE statefp10 = '{st_fips}' ORDER BY geoid10;")
 
-    def ls_geo_st(self):
+    def ls_geo_states(self):
         return self.exec_get('SELECT gid, statefp10, geoid10, stusps10, name10 FROM geo.st ORDER BY geoid10;')
 
     def set_pop_view_household(self, stcotrbg):
@@ -81,19 +81,26 @@ class LocaleDB(object):
 if __name__ == '__main__':
     db = LocaleDB()
 
-    # print(db.ls_geo_st())
-    print(db.ls_geo_co('02'))
+    # Get the list of states:
+    # print(db.ls_geo_states())
 
-    # db.set_pop_view_household('02')
-    # print(db.get_pop())
+    # Get the list of Alaska counties:
+    # print(db.ls_geo_counties('02'))
 
-    # db.set_pop_view_household('10')
-    # print(db.get_pop())
+    # Get size of synthetic population of Alaska:
+    db.set_pop_view_household('02')
+    print(db.get_pop_size())
 
+    # Get size of synthetic population of Delaware:
+    db.set_pop_view_household('10')
+    print(db.get_pop_size())
+
+    # Get information about one of Alaska's counties:
     db.set_pop_view_household('02013')
-    print(db.get_pop())
-    print(db.exec_get('SELECT COUNT(*) FROM person_view p INNER JOIN pop.school s ON p.school_id = s.id'))
+    print(db.get_pop_size())  # synthetic population size
+    print(db.exec_get('SELECT COUNT(*) FROM person_view p WHERE NOT school_id IS NULL'))  # number of schools
 
+    # Get information about one of Delaware's counties:
     db.set_pop_view_household('02016')
-    print(db.get_pop())
-    print(db.exec_get('SELECT COUNT(*) FROM person_view p INNER JOIN pop.school s ON p.school_id = s.id'))
+    print(db.get_pop_size())  # synthetic population size
+    print(db.exec_get('SELECT COUNT(*) FROM person_view p WHERE NOT school_id IS NULL'))  # number of schools
