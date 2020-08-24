@@ -16,16 +16,14 @@ LocaleDB can be deployed to a development and production environments.  It is re
 
 ### Development Environment
 
-- curl
-- docker
-- unzip
+- curl or wget
+- [Docker](https://www.docker.com)
 
 ### Production Environment
 
-- curl
+- curl or wget
 - PostgreSQL server (with PostGIS extensions)
-- Python 3
-- unzip
+- [Python 3](https://www.python.org)
 
 **Note**: LocaleDB should not be deployed to a production environment yet.  This note will be removed when that deployment mode has been fully implemented and fully tested.
 
@@ -195,10 +193,10 @@ For the list of available commands, run `localedb`.  For an explanation of each 
 ### Python
 
 ```python
-import localedb
+from localedb import LocaleDB
 db = LocaleDB()
 db.set_pop_view_household('02013')  # this assumes population of Alaska has been imported
-print(db.get_pop())
+print(db.get_pop_size())
 ```
 
 
