@@ -9,7 +9,7 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 
 <center><img height="526" alt="portfolio_view" src="media/design.png" /></center>
 
-This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require few to no manual management.  It will then be used for producing data that will drive modeling and simulation efforts.
+This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require little to no manual management (periodic updates will be autonomous).  It will then be used for producing data that will drive modeling and simulation efforts.
 
 
 ## Dependencies: Database Server
