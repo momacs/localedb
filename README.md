@@ -12,6 +12,8 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 
 ## Dependencies
 
+LocaleDB can be deployed to a development and production environments.  It is recommended to familiarize yourself with the software using the development environment first.
+
 ### Development Environment
 
 - curl
