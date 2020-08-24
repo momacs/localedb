@@ -731,17 +731,6 @@ case "$cmd" in
         ;;
     "setup")
         # Environment:
-        case "$(uname)" in
-            #"Darwin")
-            #    if [ ! is_cmd docker ]; then
-            #        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
-            #        brew install docker
-            #    fi
-            #    ;;
-            "Darwin" | "Linux") req_cmd docker;;
-            *) echo "Unsupported operating system." && exit 1;;
-        esac
-        
         mkdir -p $dir_root
         mkdir -p $dir_dl_geo
         mkdir -p $dir_dl_pop
