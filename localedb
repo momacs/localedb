@@ -18,15 +18,13 @@
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # Dependencies (development environment)
-#     curl
+#     curl or wget
 #     docker
-#     unzip
 #
 # Dependencies (production environment)
-#     curl
+#     curl or wget
 #     PostgreSQL server (with PostGIS extensions)
 #     Python 3
-#     unzip
 #
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -93,6 +91,12 @@ declare -r self_name=$(basename $0)
 declare -r self_path=$(dirname $0)
 declare -r cmd=$1
 declare -r usage="Usage: $self_name $cmd"
+
+if [ $(command -v curl) ]; then
+    declare -r cmd_dl="curl -sO"
+elif [ $(command -v wget) ]; then
+    declare -r cmd_dl="wget -qO"
+fi
 
 if [ $is_prod == 1 ]; then
     declare -r cmd_shp2pgsql="shp2pgsql -W \"latin1\" -a -s 4269 $dir_rt"
@@ -410,7 +414,8 @@ fs_download_unzip() {
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-get_db_cnt() { echo $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $1.$2;"); }
+get_tbl_rec_cnt() { echo $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $1.$2;" | sed -e '$d' | bc); }
+get_int() { echo $(psql $pg_conn_str -q -t -c "$1" | sed -e '$d' | bc); }
 
                                                                                       
 # ----------------------------------------------------------------------------------------------------------------------
@@ -427,7 +432,7 @@ is_db_tbl() { echo $(psql $pg_conn_str -q -t -c "SELECT CASE WHEN (SELECT to_reg
 #   $4 state FIPS code [opt]
 #
 proc_item_geo() {
-    [ "$3" == "st" -o "$3" == "co" ] && [ $(is_db_tbl $pg_schema_geo $3) == 1 ] && [ $(get_db_cnt $pg_schema_geo $3) -gt 0 ] && return 0
+    [ "$3" == "st" -o "$3" == "co" ] && [ $(is_db_tbl $pg_schema_geo $3) == 1 ] && [ $(get_tbl_rec_cnt $pg_schema_geo $3) -gt 0 ] && return 0
     
     local fname=$(basename $2 .zip)
     
@@ -437,7 +442,7 @@ proc_item_geo() {
     while [ ! -f $dir_dl_geo/$fname.zip ]; do
         echo -e -n "\r$1  downloading...$attempt"
         cd $dir_dl_geo
-        curl -sO $2  # census server doesn't support resume, i.e., "curl -C -"
+        $cmd_dl $2
         if [ $? -ne 0 ]; then
             rm -f $dir_dl_pop/$fname.zip
             rm $2
@@ -480,7 +485,8 @@ proc_item_pop() {
     while [ ! -f $dir_dl_pop/$fname.zip ]; do
         echo -e -n "\r$1  downloading...$attempt"
         cd $dir_dl_pop
-        curl -sO $2  # TODO: curl -C -
+        curl -sO $2
+        $cmd_dl $2
         if [ $? -ne 0 ]; then
             rm -f $dir_dl_pop/$fname.zip
             i=$(echo "$i + 1" | bc)
@@ -517,6 +523,11 @@ st_name2fips() { i=$(st_name2idx $1); echo "${st_fips[@]:$i:1}"; }
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+! is_cmd curl   && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
+! is_cmd docker &&                  echo "Dependency unmet: docker"       && exit 1
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 case "$cmd" in
     "db")
         case "$2" in
@@ -526,7 +537,7 @@ case "$cmd" in
             "exec")
                 req_argn $# 3 "$2 <sql-query>"
                 # TODO: if [[ "$3" =~ .*"INSERT".* ]]; then
-                psql $pg_conn_str -q -t -c $3
+                psql $pg_conn_str -q -t -c "$3"
                 ;;
             "init")
                 db_init $3
@@ -587,19 +598,20 @@ case "$cmd" in
                 esac;;
             "stats")
                 echo "geo"
-                echo "    st  "$(get_db_cnt $pg_schema_geo st)
-                echo "    co  "$(get_db_cnt $pg_schema_geo co)
-                echo "    tr  "$(get_db_cnt $pg_schema_geo tr)
-                echo "    bg  "$(get_db_cnt $pg_schema_geo bg)
-                echo "    bl  "$(get_db_cnt $pg_schema_geo bl)
+                echo "    st  "$(get_tbl_rec_cnt $pg_schema_geo st)
+                echo "    co  "$(get_tbl_rec_cnt $pg_schema_geo co)
+                echo "    tr  "$(get_tbl_rec_cnt $pg_schema_geo tr)
+                echo "    bg  "$(get_tbl_rec_cnt $pg_schema_geo bg)
+                echo "    bl  "$(get_tbl_rec_cnt $pg_schema_geo bl)
+                #echo "    states: $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") > 0 ]; then"
                 echo "pop"
-                echo "    school     "$(get_db_cnt $pg_schema_pop school)
-                echo "    hospital   "$(get_db_cnt $pg_schema_pop hospital)
-                echo "    household  "$(get_db_cnt $pg_schema_pop household)
-                echo "    gq         "$(get_db_cnt $pg_schema_pop gq)
-                echo "    workplace  "$(get_db_cnt $pg_schema_pop workplace)
-                echo "    person     "$(get_db_cnt $pg_schema_pop person)
-                echo "    gq_person  "$(get_db_cnt $pg_schema_pop gq_person)
+                echo "    school     "$(get_tbl_rec_cnt $pg_schema_pop school)
+                echo "    hospital   "$(get_tbl_rec_cnt $pg_schema_pop hospital)
+                echo "    household  "$(get_tbl_rec_cnt $pg_schema_pop household)
+                echo "    gq         "$(get_tbl_rec_cnt $pg_schema_pop gq)
+                echo "    workplace  "$(get_tbl_rec_cnt $pg_schema_pop workplace)
+                echo "    person     "$(get_tbl_rec_cnt $pg_schema_pop person)
+                echo "    gq_person  "$(get_tbl_rec_cnt $pg_schema_pop gq_person)
                 ;;
             *) echo "$usage $2{conn exec init init-geo init-pop rm stats}" && exit 1;;
         esac;;
@@ -654,8 +666,10 @@ case "$cmd" in
                 else
                     fips=$(st_name2fips $3)
                     
-                    if [ "$4" != "1" ] && [ $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") > 0 ]; then
-                        conf_yn "State has already been imported.  Remove it and import again?" || exit 0
+                    
+                    #if [ "$4" != "1" ] && [ $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") > 0 ]; then
+                    if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") -gt 0 ]; then
+                        conf_yn "Geographic data for that state already exists. Remove it and import again?" || exit 0
                     fi
                     
                     proc_item_geo "US states      " $url_geo_st st
@@ -685,9 +699,9 @@ case "$cmd" in
                     for st in "${st_name[@]}"; do proc_item_pop "$st" "${url_pop[0]}$st${url_pop[1]}" $(st_name2fips $st); done
                 else
                     fips=$(st_name2fips $3)
-                    
-                    if [ "$4" != "1" ] && [ $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $pg_schema_pop.household WHERE st_fips = '$fips';") > 0 ]; then
-                        conf_yn "State has already been imported. Remove it and import again?" || exit 0
+
+                    if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_pop.household WHERE st_fips = '$fips';") -gt 0 ]; then
+                        conf_yn "Population data for that state already exists. Remove it and import again?" || exit 0
                     fi
                     
                     proc_item_pop "$3" "${url_pop[0]}$3${url_pop[1]}" $fips
@@ -752,6 +766,11 @@ case "$cmd" in
         [ $is_prod == 0 ] && docker stop $docker_cont > /dev/null
         ;;
     "update")
+        cd $HOME/bin
+        rm -f ./localedb-update.bak
+        mv ./localedb ./localedb-update.bak
+        $cmd_dl https://raw.githubusercontent.com/momacs/localedb/master/localedb
+        rm -f ./localedb-update.bak
         ;;
     "uninstall")
         req_y "This will remove all downloaded data and the contents of the '$pg_db' database. Continue?"
