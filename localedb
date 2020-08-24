@@ -754,13 +754,6 @@ case "$cmd" in
         [ $is_prod == 0 ] && docker stop $docker_cont > /dev/null
         ;;
     "update")
-        #cd $HOME/bin
-        #rm -f ./localedb-update.bak
-        #mv ./localedb ./localedb-update.bak
-        #$cmd_dl https://raw.githubusercontent.com/momacs/localedb/master/localedb
-        #chmod a+x ./localedb
-        #rm -f ./localedb-update.bak
-        
         fs_upd $HOME/bin https://raw.githubusercontent.com/momacs/localedb/master/localedb
         fs_upd $dir_script https://raw.githubusercontent.com/momacs/localedb/master/localedb_man.py
         chmod a+x $HOME/bin/localedb
