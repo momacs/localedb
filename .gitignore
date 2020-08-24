@@ -1,0 +1,37 @@
+# Local:
+/_backup
+/bin
+/lib
+/media-src
+/tmp
+/is-root
+/mk-notebooks-backup
+/mk-src-backup
+/pyvenv.cfg
+
+# Python:
+*.pyc
+__pycache__/
+/dist/
+/*.egg-info
+
+# LaTeX:
+/src/**/*.gz
+/src/**/*.pdf
+/src/**/*.out
+/src/**/*.log
+/src/**/*.aux
+/src/**/*.tex
+
+# R:
+.RData
+.Rhistory
+
+# MacOS:
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
