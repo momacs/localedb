@@ -8,6 +8,7 @@ import psycopg2.extras
 import re
 import sys
 
+from abc         import ABC
 from collections import namedtuple
 from pathlib     import Path
 
@@ -22,17 +23,44 @@ def req_argn(n):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-class DisDyn(object):
-    pass
+class DBSchemaMan(ABC):
+    """Database schema manager.
+
+    Manages one type of data type.  Data type are compartmentalized via PostgreSQL's schemas.
+    """
+
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema, dpath_rt, cursor_factory=psycopg2.extras.NamedTupleCursor):
+        self.pg_host   = pg_host
+        self.pg_port   = pg_port
+        self.pg_usr    = pg_usr
+        self.pg_pwd    = pg_pwd
+        self.pg_db     = pg_db
+        self.pg_schema = pg_schema
+
+        self.dpath_rt = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
+
+        self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
+
+    def __del__(self):
+        if hasattr(self, 'conn') and self.conn is not None:
+            self.conn.close()
+            self.conn = None
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-class Evt(object):
-    pass
+class DisDyn(DBSchemaMan):
+    def import_state(self, st_fips):
+        pass
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-class Pop(object):
+class Interv(DBSchemaMan):
+    def import_state(self, st_fips):
+        pass
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+class Pop(DBSchemaMan):
     CountyTxtFile = namedtuple('CountyTxtFile', ('fname', 'tbl', 'ln_re', 'copy_sql', 'upd_coords_col'))
 
     NA = 'X'  # missing value string
@@ -56,23 +84,6 @@ class Pop(object):
         CountyTxtFile('people.txt',     'person',    (False, re.compile(r'^\d+\t\d+\t\d+\t[FM]\t\d+\t\d+\t(?:\d+|X)\t(?:\d+|X)$')),    f"COPY tmp_person    (id, household_id, age, sex, race_id, relate_id, school_id, workplace_id) FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", False),
         CountyTxtFile('gq_people.txt',  'gq_person', (False, re.compile(r'^\d+\t\d+\t\d+\t[FM]$')),                                    f"COPY tmp_gq_person (id, gq_id, age, sex)                                                     FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", False)
     ]
-
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema, dpath_rt):
-        self.pg_host   = pg_host
-        self.pg_port   = pg_port
-        self.pg_usr    = pg_usr
-        self.pg_pwd    = pg_pwd
-        self.pg_db     = pg_db
-        self.pg_schema = pg_schema
-
-        self.dpath_rt = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
-
-        self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=psycopg2.extras.NamedTupleCursor)
-
-    def __del__(self):
-        if hasattr(self, 'conn') and self.conn is not None:
-            self.conn.close()
-            self.conn = None
 
     def import_state(self, st_fips):
         """Imports a state to the database.
@@ -156,6 +167,12 @@ class LocaleDB(object):
 
         self.dpath_rt = dpath_rt
 
+    def get_disdyn(self):
+        return DisDyn(self.pg_host, self.pg_port, self.pg_usr, self.pg_pwd, self.pg_db, self.pg_schema_pop, self.dpath_rt)
+
+    def get_interv(self):
+        return Interv(self.pg_host, self.pg_port, self.pg_usr, self.pg_pwd, self.pg_db, self.pg_schema_pop, self.dpath_rt)
+
     def get_pop(self):
         return Pop(self.pg_host, self.pg_port, self.pg_usr, self.pg_pwd, self.pg_db, self.pg_schema_pop, self.dpath_rt)
 
@@ -173,5 +190,11 @@ if __name__ == '__main__':
     if sys.argv[9] == 'import-pop-state':
         req_argn(10)
         LocaleDB(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8]).get_pop().import_state(sys.argv[10])
+    if sys.argv[9] == 'import-disdyn-state':
+        req_argn(10)
+        LocaleDB(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8]).get_disdyn().import_state(sys.argv[10])
+    if sys.argv[9] == 'import-interv-state':
+        req_argn(10)
+        LocaleDB(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8]).get_interv().import_state(sys.argv[10])
     else:
         print(f'Unknown command: {sys.argv[9]}')
