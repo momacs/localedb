@@ -405,7 +405,7 @@ fs_upd() {
     
     cd $1
     rm -f ./${fname}.upd
-    mv -f ./$fname ./${fname}.upd
+    [ -f ./$fname ] && mv -f ./$fname ./${fname}.upd
     $cmd_dl $2
     rm -f ./${fname}.upd
 }
