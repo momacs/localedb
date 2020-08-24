@@ -9,6 +9,8 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 
 <center><img height="526" alt="portfolio_view" src="media/design.png" /></center>
 
+This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require few to no manual management.  It will then be used for producing data that will drive modeling and analysis efforts.
+
 
 ## Dependencies: Database Server
 
@@ -192,12 +194,20 @@ For the list of available commands, run `localedb`.  For an explanation of each 
 
 ### Python
 
+Here is an example of the Python LocaleDB package can be used:
+
 ```python
 from localedb import LocaleDB
 db = LocaleDB()
-db.set_pop_view_household('02013')  # this assumes population of Alaska has been imported
+
+db.set_pop_view_household('02')     # constrain view to households located in Alaska
+print(db.get_pop_size())            # get size of population that lives in those households
+
+db.set_pop_view_household('02013')  # do the same for one of the counties in Alaska
 print(db.get_pop_size())
 ```
+
+If the database is not installed on the localhost (or if any other connection parameters need to be adjusted), they should be passed to the `LocaleDB` class' constructor.  Documentation of the package will be published when more functionality is built into it.
 
 
 ## References
