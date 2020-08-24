@@ -4,8 +4,6 @@
 import psycopg2
 import psycopg2.extras
 
-from pram.util import PgDB
-
 
 __all__ = ['LocaleDB']
 
