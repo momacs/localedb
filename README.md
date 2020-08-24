@@ -49,6 +49,16 @@ Alternatively, you can run the commands from the [`setup.sh`](setup.sh) script m
 
 ### Python Client Package
 
+It is never a bad idea to first create a new Python virtual environment:
+
+```
+python3 -m venv ./prj01
+cd prj01
+source ./bin/activate
+```
+
+Then, install the package like so:
+
 ```
 pip install git+https://github.com/momacs/localedb.git
 ```
@@ -179,7 +189,7 @@ For the list of available commands, run `localedb`.  For an explanation of each 
 ```python
 import localedb
 db = LocaleDB()
-db.set_pop_view_household('02013')
+db.set_pop_view_household('02013')  # this assumes population of Alaska has been imported
 print(db.get_pop())
 ```
 
