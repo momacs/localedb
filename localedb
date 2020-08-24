@@ -31,6 +31,8 @@
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # TODO
+#     Figure out how to contionally run setup.py on Linux
+#         pip install psycopg2-binary
 #     Implement fs_download_unzip() below
 #     Compose a Docker container with shp2pgsql and Python already inside
 #     Move most of the functionality from this script into the container
