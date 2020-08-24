@@ -742,6 +742,7 @@ case "$cmd" in
         rm -f ./localedb-update.bak
         mv ./localedb ./localedb-update.bak
         $cmd_dl https://raw.githubusercontent.com/momacs/localedb/master/localedb
+        chmod a+x ./localedb
         rm -f ./localedb-update.bak
         ;;
     "uninstall")
