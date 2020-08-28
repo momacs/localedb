@@ -12,6 +12,26 @@ As shown on the figure below, LocaleDB stores several types of data (gray boxes 
 This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require little to no manual management (periodic updates will be autonomous).  It will then be used for producing data that will drive modeling and simulation efforts.
 
 
+## Data Types
+
+As depicted on the figure above, the current projection is for LocaleDB to contain the following data types:
+
+- **Geographic and cartographic** (e.g., area of land, population density)
+​- **Population** ​(e.g., households, their incomes, age of people, etc.)
+- **Disease dynamics** ​(e.g., number of confirmed cases)
+- ​**Non-pharmaceutical interventions** ​(e.g., dates of stay-at-home order)
+- **Clinical** ​(e.g., R0, incubation period, proportion of asymptomatic cases, etc.)
+- ​**Local events** ​(e.g., dates and sizes of mass protests)
+- ​**Mobility** ​(mobile-phone based)
+- ​**Health factors and outcomes** ​(e.g., diet, exercise, access to care, etc.)
+- **Vaccine** (e.g., availability, efficacy, allocation strategies, level of antipathy, etc.)
+- ​**Climate and weather**
+
+All that data will be stratified by locale at all available levels of spatial aggregation (e.g., state, county, tract, block group, block).  While the U.S. is going to be the primary focus, it may behoove us to eventually expand the scope to international.  A good example is vaccine data which may be far easier to obtain for countries like Singapore or Korea.
+
+In terms of temporal resolution, the highest frequency with which processes are sampled/measured will be the goal.  For example, disease dynamics will be represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes will be encoded with far fewer time steps (probably months).
+
+
 ## Dependencies: Database Server
 
 LocaleDB can be deployed to a development and production environments.  It is recommended to familiarize yourself with the software using the development environment first.
