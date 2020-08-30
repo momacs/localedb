@@ -39,7 +39,6 @@ LocaleDB can be deployed to a development and production environments.  It is re
 ### Development Environment
 
 - curl or wget
-- PostgreSQL client
 - [Docker](https://www.docker.com)
 
 ### Production Environment
