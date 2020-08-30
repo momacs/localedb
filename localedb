@@ -20,7 +20,6 @@
 # Dependencies (development environment)
 #     curl or wget
 #     docker
-#     PostgreSQL client
 #
 # Dependencies (production environment)
 #     curl or wget
@@ -35,8 +34,7 @@
 #         pip install psycopg2-binary
 #     Implement fs_download_unzip() below
 #     Compose a Docker container with shp2pgsql and Python already inside
-#     Move most of the functionality from this script into the container
-#         This will likely remove psql dependency on dev env
+#     Move the majority of the functionality from this script into the Docker container
 #
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -77,22 +75,38 @@ declare -r self_path=$(dirname $0)
 declare -r cmd=$1
 declare -r usage="Usage: $self_name $cmd"
 
-if [ $(command -v curl) ]; then
+
+# ----------------------------------------------------------------------------------------------------------------------
+is_cmd() { command -v $1 > /dev/null 2>&1 && return 0 || return 1; }
+
+if is_cmd curl; then
     declare -r cmd_dl="curl -sO"
-elif [ $(command -v wget) ]; then
+elif is_cmd wget; then
     declare -r cmd_dl="wget -q"
 fi
 
 if [ $is_prod == 1 ]; then
+    ! is_cmd curl      && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
+    ! is_cmd psql      &&                  echo "Dependency unmet: psql"         && exit 1
+    ! is_cmd shp2pgsql &&                  echo "Dependency unmet: shp2pgsql"    && exit 1
+    ! is_cmd python3   &&                  echo "Dependency unmet: python3"      && exit 1
+    
+    declare -r cmd_psql="psql $pg_conn_str -q"
     declare -r cmd_shp2pgsql="shp2pgsql -W \"latin1\" -a -s 4269 $dir_rt"
     declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_geo $pg_schema_pop $dir_rt"
 else
+    ! is_cmd curl   && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
+    ! is_cmd docker &&                  echo "Dependency unmet: docker"       && exit 1
+    
+    declare -r cmd_psql="docker exec $docker_cont psql postgresql://${pg_usr}:${pg_pwd}@localhost:5432/${pg_db} -q"
     declare -r cmd_shp2pgsql="docker exec $docker_cont shp2pgsql -W \"latin1\" -a -s 4269 $dir_rt_docker"
     declare -r cmd_py="docker exec $docker_cont python3 $dir_script_docker/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_geo $pg_schema_pop $dir_rt_docker"
 fi
 
 [ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
-    
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 declare -a st_name=("AL" "AK" "AZ" "AR" "CA" "CO" "CT" "DE" "DC" "FL" "GA" "HI" "ID" "IL" "IN" "IA" "KS" "KY" "LA" "ME" "MD" "MA" "MI" "MN" "MS" "MO" "MT" "NE" "NV" "NH" "NJ" "NM" "NY" "NC" "ND" "OH" "OK" "OR" "PA" "RI" "SC" "SD" "TN" "TX" "UT" "VT" "VA" "WA" "WV" "WI" "WY")
     # "AS" "GU" "MP" "PR" "VI" -- in 'geo' but not 'pop' so skipping
 
@@ -107,6 +121,8 @@ declare -a url_geo_bl=("https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/201
 
 declare -a url_pop=("https://gitlab.com/momacs/dataset-pop-us-2010-midas/-/raw/master/zip/" ".zip")
 
+
+# ----------------------------------------------------------------------------------------------------------------------
 declare -r sql_schema_geo="
     BEGIN;
     
@@ -223,6 +239,8 @@ declare -r sql_schema_geo="
     COMMIT;
 "
 
+
+# ----------------------------------------------------------------------------------------------------------------------
 # The schema of the original synthetic population data has been updated (see comments below):
 declare -r sql_schema_pop="
     BEGIN;
@@ -312,6 +330,8 @@ declare -r sql_schema_pop="
     COMMIT;
 "
 
+
+# ----------------------------------------------------------------------------------------------------------------------
 declare -r sql_schema_disdyn="
     BEGIN;
     
@@ -323,6 +343,8 @@ declare -r sql_schema_disdyn="
     COMMIT;
 "
 
+
+# ----------------------------------------------------------------------------------------------------------------------
 declare -r sql_schema_interv="
     BEGIN;
     
@@ -342,7 +364,7 @@ conf_yn() { read -p "$1 [y/n] " res; [ "$res" == "y" -o "$res" == "Y" ] && retur
 # ----------------------------------------------------------------------------------------------------------------------
 db_analyze() {
     echo -n "Analyzing database..."
-    psql $pg_conn_str -q -c "VACUUM ANALYZE;"
+    $cmd_psql -c "VACUUM ANALYZE;"
     echo " done"
 }
 
@@ -356,7 +378,7 @@ db_init() {
     
     PGPASSWORD=$pg_pwd dropdb   -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db > /dev/null 2>&1
     PGPASSWORD=$pg_pwd createdb -h $pg_host -p $pg_port -U $pg_usr             $pg_db > /dev/null 2>&1
-    psql $pg_conn_str -q -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+    $cmd_psql -c "CREATE EXTENSION IF NOT EXISTS postgis;"
     
     db_init_geo 1
     db_init_pop 1
@@ -370,8 +392,8 @@ db_init() {
 db_init_geo() {
     [ "$1" != "1" ] && req_y "Reinitialize the geographic part of the database?"
     
-    psql $pg_conn_str -q -c "$sql_schema_geo" > /dev/null 2>&1
-    psql $pg_conn_str -q -c "VACUUM FULL;"
+    $cmd_psql -c "$sql_schema_geo" > /dev/null 2>&1
+    $cmd_psql -c "VACUUM FULL;"
 }
 
 
@@ -382,8 +404,8 @@ db_init_geo() {
 db_init_pop() {
     [ "$1" != "1" ] && req_y "Reinitialize the population part of the database?"
     
-    psql $pg_conn_str -q -c "$sql_schema_pop" > /dev/null 2>&1
-    psql $pg_conn_str -q -c "VACUUM FULL;"
+    $cmd_psql -c "$sql_schema_pop" > /dev/null 2>&1
+    $cmd_psql -c "VACUUM FULL;"
 }
 
 
@@ -414,13 +436,12 @@ fs_upd() {
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-get_tbl_rec_cnt() { echo $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $1.$2;" | sed -e '$d' | bc); }
-get_int() { echo $(psql $pg_conn_str -q -t -c "$1" | sed -e '$d' | bc); }
+get_tbl_rec_cnt() { echo $($cmd_psql -t -c "SELECT COUNT(*) FROM $1.$2;" | sed -e '$d' | bc); }
+get_int() { echo $($cmd_psql -t -c "$1" | sed -e '$d' | bc); }
 
                                                                                       
 # ----------------------------------------------------------------------------------------------------------------------
-is_cmd() { command -v $1 > /dev/null 2>&1 && return 0 || return 1; }
-is_db_tbl() { echo $(psql $pg_conn_str -q -t -c "SELECT CASE WHEN (SELECT to_regclass('$1.$2')) IS NULL THEN 0 ELSE 1 END;"); }
+is_db_tbl() { echo $($cmd_psql -t -c "SELECT CASE WHEN (SELECT to_regclass('$1.$2')) IS NULL THEN 0 ELSE 1 END;"); }
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -460,9 +481,8 @@ proc_item_geo() {
     
     unzip -q $dir_dl_geo/$fname.zip -d $dir_rt
     
-    [ "$4" != "" ] && psql $pg_conn_str -q -c "DELETE FROM $pg_schema_geo.$3 WHERE statefp10 = '$4'"
-    #$shp2pgsql -W "latin1" -a -s 4269 $dir_rt_/$fname.shp $pg_schema_geo.$3 2> $out | psql $pg_conn_str -q > $out
-    $cmd_shp2pgsql/$fname.shp $pg_schema_geo.$3 2> $out | psql $pg_conn_str -q > $out
+    [ "$4" != "" ] && $cmd_psql -c "DELETE FROM $pg_schema_geo.$3 WHERE statefp10 = '$4'"
+    $cmd_shp2pgsql/$fname.shp $pg_schema_geo.$3 2> $out | $cmd_psql > $out
     
     rm -fr $dir_rt/*
     echo -e "\r$1  done                                         "
@@ -523,22 +543,16 @@ st_name2fips() { i=$(st_name2idx $1); echo "${st_fips[@]:$i:1}"; }
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-! is_cmd curl   && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
-! is_cmd docker &&                  echo "Dependency unmet: docker"       && exit 1
-! is_cmd psql   &&                  echo "Dependency unmet: psql"         && exit 1
-
-
-# ----------------------------------------------------------------------------------------------------------------------
 case "$cmd" in
     "db")
         case "$2" in
             "conn")
-                psql $pg_conn_str
+                $cmd_psql
                 ;;
             "exec")
                 req_argn $# 3 "$2 <sql-query>"
                 # TODO: if [[ "$3" =~ .*"INSERT".* ]]; then
-                psql $pg_conn_str -q -t -c "$3"
+                $cmd_psql -t -c "$3"
                 ;;
             "init")
                 db_init $3
@@ -568,7 +582,7 @@ case "$cmd" in
                         [ "$5" != "1" ] && req_y "Remove geographic data for $4?"
                         
                         fips=$(st_name2fips $4)
-                        psql $pg_conn_str -q -c "
+                        $cmd_psql -c "
                             BEGIN;
                             DELETE FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';
                             DELETE FROM $pg_schema_geo.bg WHERE statefp10 = '$fips';
@@ -584,7 +598,7 @@ case "$cmd" in
                         [ "$5" != "1" ] && req_y "Remove population data for $4?"
                         
                         fips=$(st_name2fips $4)
-                        psql $pg_conn_str -q -c "
+                        $cmd_psql -c "
                             BEGIN;
                             DELETE FROM $pg_schema_pop.school    WHERE st_fips = '$fips';
                             DELETE FROM $pg_schema_pop.hospital  WHERE st_fips = '$fips';
@@ -604,7 +618,7 @@ case "$cmd" in
                 echo "    tr  "$(get_tbl_rec_cnt $pg_schema_geo tr)
                 echo "    bg  "$(get_tbl_rec_cnt $pg_schema_geo bg)
                 echo "    bl  "$(get_tbl_rec_cnt $pg_schema_geo bl)
-                #echo "    states: $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") > 0 ]; then"
+                #echo "    states: $($cmd_psql -t -c "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") > 0 ]; then"
                 echo "pop"
                 echo "    school     "$(get_tbl_rec_cnt $pg_schema_pop school)
                 echo "    hospital   "$(get_tbl_rec_cnt $pg_schema_pop hospital)
@@ -667,8 +681,6 @@ case "$cmd" in
                 else
                     fips=$(st_name2fips $3)
                     
-                    
-                    #if [ "$4" != "1" ] && [ $(psql $pg_conn_str -q -t -c "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") > 0 ]; then
                     if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") -gt 0 ]; then
                         conf_yn "Geographic data for that state already exists. Remove it and import again?" || exit 0
                     fi
