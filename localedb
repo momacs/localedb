@@ -655,6 +655,20 @@ case "$cmd" in
             *) echo "$usage $2{clean rm-data}" && exit 1;;
         esac;;
     "help")
+        echo ""
+        echo "Usage: $self_name <command>"
+        echo ""
+        echo "Commands:"
+        echo "  db           Perform database related tasks"
+        echo "  fs           Perform filesystem related tasks"
+        echo "  help         Print this message"
+        echo "  import       Import data"
+        echo "  info         Display filesystem and PostgreSQL server's info"
+        echo "  setup        Setup LocaleDB on localhost"
+        echo "  start        Start LocaleDB"
+        echo "  stop         Stop LocaleDB"
+        echo "  update       Update this command line utility"
+        echo "  uninstall    Uninstall LocaleDB and optionally this command line utility"
         ;;
     "import")
         case "$2" in
