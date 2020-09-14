@@ -43,7 +43,7 @@ LocaleDB can be deployed to a development and production environments.  It is re
 
 - curl or wget
 - PostgreSQL client
-- PostgreSQL server (with PostGIS and TimescaleDB extensions)
+- PostgreSQL server (with [PostGIS](https://github.com/postgis/postgis) and [TimescaleDB](https://github.com/timescale/timescaledb) extensions)
 - [Python 3](https://www.python.org)
 
 **Note**: LocaleDB should not be deployed to a production environment yet.  This note will be removed when that deployment mode has been fully implemented and fully tested.
