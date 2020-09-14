@@ -7,7 +7,7 @@ A database of U.S. locales.  Currently, the database supports epidemiological mo
 
 As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extentions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The content of the database is accessed via a Python package which provides a high level API to, for example, suggest U.S. counties similar to the county specified.
 
-<center><img height="526" alt="portfolio_view" src="https://github.com/momacs/localedb/raw/5241815f52e0b63f2037f5c8b0bccf727ddff39e/media/design.png" /></center>
+<center><img height="526" alt="portfolio_view" src="media/design.png" /></center>
 
 This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require little to no manual management (periodic updates will be autonomous).  It will then be used for producing data that will drive modeling and simulation efforts.
 
