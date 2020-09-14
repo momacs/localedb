@@ -5,7 +5,7 @@ A database of U.S. locales.  Currently, the database supports epidemiological mo
 
 ## Design
 
-As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extentions).  That data is stored in a PosgreSQL database which is managed by a command line tool ([`localedb`](localedb)).  The content of the database is accessed via a Python package which provides a high level API to, for example, suggest U.S. counties similar to the county specified.
+As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extentions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The content of the database is accessed via a Python package which provides a high level API to, for example, suggest U.S. counties similar to the county specified.
 
 <center><img height="526" alt="portfolio_view" src="https://github.com/momacs/localedb/raw/5241815f52e0b63f2037f5c8b0bccf727ddff39e/media/design.png" /></center>
 
@@ -16,20 +16,18 @@ This design that separates data management and data consumption reflects the ant
 
 As depicted on the figure above, the current projection is for LocaleDB to contain the following data types:
 
-- **Geographic and cartographic** (e.g., area of land, population density)
-​- **Population** ​(e.g., households, their incomes, age of people, etc.)
 - **Disease dynamics** ​(e.g., number of confirmed cases)
-- ​**Non-pharmaceutical interventions** ​(e.g., dates of stay-at-home order)
 - **Clinical** ​(e.g., R0, incubation period, proportion of asymptomatic cases, etc.)
-- ​**Local events** ​(e.g., dates and sizes of mass protests)
-- ​**Mobility** ​(mobile-phone based)
+- ​**Non-pharmaceutical interventions** ​(**NPIs**; e.g., dates of stay-at-home order)
+- **Medical countermeasures** (**MCMs**; e.g., vaccine availability, efficacy, and allocation strategies)
+- **Population** ​(e.g., households, their incomes, age of people, etc.)
+- **Geographic and cartographic** (e.g., area of land, population density)
+​- ​**Mobility** ​(mobile-phone based)
 - ​**Health factors and outcomes** ​(e.g., diet, exercise, access to care, etc.)
-- **Vaccine** (e.g., availability, efficacy, allocation strategies, level of antipathy, etc.)
-- ​**Climate and weather**
+- ​**Local events** ​(e.g., dates and sizes of mass protests)
+- ​**Meteorological**
 
-All that data will be stratified by locale at all available levels of spatial aggregation (e.g., state, county, tract, block group, block).  While the U.S. is going to be the primary focus, it may behoove us to eventually expand the scope to international.  A good example is vaccine data which may be far easier to obtain for countries like Singapore or Korea.
-
-In terms of temporal resolution, the highest frequency with which processes are sampled/measured will be the goal.  For example, disease dynamics will be represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes will be encoded with far fewer time steps (probably months).
+All that data will be stratified by locale at all available levels of spatial aggregation (e.g., country, state, county, tract, block group, block).  In terms of temporal resolution, the highest frequency with which processes are sampled/measured will be the goal.  For example, disease dynamics will be represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes will be encoded with far fewer time steps (probably months).
 
 
 ## Dependencies: Database Server
@@ -108,9 +106,9 @@ $ localedb info
 Environment
     Production  0
 Directory structure
-    Root                   /Users/tomek/.localedb            322M
+    Root                   /Users/tomek/.localedb            43M
     Runtime                /Users/tomek/.localedb/rt         0B
-    PostgreSQL data        /Users/tomek/.localedb/pg         322M
+    PostgreSQL data        /Users/tomek/.localedb/pg         43M
     Geographic data        /Users/tomek/.localedb/dl/geo     0B
     Population data        /Users/tomek/.localedb/dl/pop     0B
     Disease dynamics data  /Users/tomek/.localedb/dl/disdyn  0B
@@ -201,6 +199,20 @@ localedb db rm-data pop
 localedb db rm data-all  # remove all data files
 ```
 
+To import COVID-19 disease dynamics and non-pharmaceutical interventions (NPIs; currently U.S. only but global coming soon), run:
+
+```
+$ localedb import dis c19
+Importing global confirmed... done (10 s)
+Importing global deaths... done (11 s)
+Importing global recovered... done (10 s)
+Importing US confirmed... done (130 s)
+Importing US deaths... done (142 s)
+Consolidating... done (44 s)
+
+$ localedb import npi
+```
+
 To stop LocaleDB instance, run:
 
 ```
@@ -230,12 +242,14 @@ db.set_pop_view_household('02013')  # do the same for one of the counties in Ala
 print(db.get_pop_size())
 ```
 
-If the database is not installed on the localhost (or if any other connection parameters need to be adjusted), they should be passed to the `LocaleDB` class' constructor.  Documentation of the package will be published when more functionality is built into it.
+If the database is not installed on the localhost (or if any other connection parameters need to be adjusted), they should be passed to the `LocaleDB` class' constructor.  Documentation of the package will be published later on.
 
 
 ## References
 
-- [2010 U.S. Synthesized Population Dataset (MIDAS Program)](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
+- [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
+- [Keystone: COVID-19 Intervention Data](https://github.com/Keystone-Strategy/covid19-intervention-data)
+- [2010 U.S. Synthesized Population Dataset](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
 
 
 ## License
