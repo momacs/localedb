@@ -391,9 +391,3 @@ if __name__ == '__main__':
         LocaleDB(*sys.argv[1:12]).get_pop().import_state(sys.argv[13])
     else:
         print(f'Unknown command: {sys.argv[12]}')
-
-# def a(x,y,z):
-#     print(f'{x}:{y}:{z}')
-#
-# A = [1,2,3,4]
-# a(*A[1:4])
