@@ -1,6 +1,6 @@
 # LocaleDB
 
-A database of U.S. locales.  Currently, the database supports epidemiological modeling and simulation is specifically tailored towards the COVID 19 pandemic.  Modeling in other disciplies may be supporeted in the future.
+A database of global locales to support modeling and simulation in epidemiology with the current focus on the COVID 19 pandemic.
 
 
 ## Design
@@ -97,54 +97,80 @@ pip install git+https://github.com/momacs/localedb.git
 
 ### CLI
 
-After setting up the command line management tool, setup the LocaleDB instance, start it, and display some info by running the following three commands:
+After setting up the command line management tool, setup the LocaleDB instance:
 
 ```
 $ localedb setup
-$ localedb start
-$ localedb info
-Environment
-    Production  0
+Initializing data structures... done
+Loading locales... done
+```
+
+To display filesystem information, run:
+
+```
+$ localedb info fs
 Directory structure
-    Root                   /Users/tomek/.localedb            43M
-    Runtime                /Users/tomek/.localedb/rt         0B
-    PostgreSQL data        /Users/tomek/.localedb/pg         43M
-    Geographic data        /Users/tomek/.localedb/dl/geo     0B
-    Population data        /Users/tomek/.localedb/dl/pop     0B
-    Disease dynamics data  /Users/tomek/.localedb/dl/disdyn  0B
-    Intervention data      /Users/tomek/.localedb/dl/interv  0B
-PostgreSQL server
-    Hostname  localhost
-    Port      5433
-    Database  c19
-    Username  postgres
-    Password  sa
+    Root               /Users/tomek/.localedb         43M
+    Runtime            /Users/tomek/.localedb/rt      0B
+    PostgreSQL data    /Users/tomek/.localedb/pg      43M
+    Disease data       /Users/tomek/.localedb/dl/dis  0B
+    Geographic data    /Users/tomek/.localedb/dl/geo  0B
+    Population data    /Users/tomek/.localedb/dl/pop  0B
 ```
 
-To see some basic database statistics (currently only record counts), run:
+To import COVID-19 disease data (currently only dynamics and non-pharmaceutical interventions), run:
 
 ```
-$ localedb db stats
-geo
-    st  0
-    co  0
-    tr  0
-    bg  0
-    bl  0
-pop
-    school     0
-    hospital   0
-    household  0
-    gq         0
-    workplace  0
-    person     0
-    gq_person  0
+$ localedb import dis c19
+Disease dynamics
+    Loading global confirmed... done (11 s)
+    Loading global deaths... done (14 s)
+    Loading global recovered... done (12 s)
+    Loading US confirmed... done (141 s)
+    Loading US deaths... done (155 s)
+    Consolidating... done (88 s)
+Non-pharmaceutical interventions
+    Loading Keystone... done (14 s)
+```
+
+To see some basic database statistics, run:
+
+```
+$ localedb info data
+Data
+    Main
+        Locale count   4153
+        Country count  188
+    Disease (c19)
+        Dynamics
+            Locale count                  3607
+            Date range                    2020-01-22 2020-09-17
+            Observation count             865680
+            Observation count per locale  240.00 (SD=0.00)
+        Non-pharmaceutical interventions
+            Locale count          669
+            Data range            2010-04-27 2020-07-27
+            NPI count             5162
+            NPI count per locale  7.72 (SD=1.57)
+            Count per type
+                669   school closure
+                667   closing of public venues
+                666   non-essential services closure
+                637   shelter in place
+                622   gathering size 10 0
+                582   social distancing
+                471   religious gatherings banned
+                406   gathering size 100 26
+                278   gathering size 500 101
+                132   gathering size 25 11
+                32    lockdown
+...
 ```
 
 To import geographic and cartographic data for the state of Alaska, run:
 
 ```
-$ localedb import geo AK
+$ localedb load geo AK
 US states        done
 US counties      done
 AK tracts        done
@@ -156,29 +182,9 @@ Analyzing database... done
 To import synthetic population data, run:
 
 ```
-$ localedb import pop AK
+$ localedb load pop AK
 AK  done
 Analyzing database... done
-```
-
-Check the database statistics again:
-
-```
-$ localedb db stats
-geo
-    st  52
-    co  3221
-    tr  167
-    bg  534
-    bl  45292
-pop
-    school     459
-    hospital   0
-    household  258057
-    gq         235
-    workplace  32206
-    person     681545
-    gq_person  13130
 ```
 
 Imported states can be removed like so:
@@ -197,20 +203,6 @@ localedb fs rm-data geo
 localedb db rm-data pop
 
 localedb db rm data-all  # remove all data files
-```
-
-To import COVID-19 disease dynamics and non-pharmaceutical interventions (NPIs; currently U.S. only but global coming soon), run:
-
-```
-$ localedb import dis c19
-Importing global confirmed... done (10 s)
-Importing global deaths... done (11 s)
-Importing global recovered... done (10 s)
-Importing US confirmed... done (130 s)
-Importing US deaths... done (142 s)
-Consolidating... done (44 s)
-
-$ localedb import npi
 ```
 
 To stop LocaleDB instance, run:
@@ -247,10 +239,14 @@ If the database is not installed on the localhost (or if any other connection pa
 
 ## References
 
+### Data Sources
+
 - [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
 - [Keystone: COVID-19 Intervention Data](https://github.com/Keystone-Strategy/covid19-intervention-data)
 - [2010 U.S. Synthesized Population Dataset](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
+- [US Census Bureau: TIGER/Line Shapefiles (2010)](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.2010.html)
 
 
 ## License
+
 This project is licensed under the [BSD License](LICENSE.md).
