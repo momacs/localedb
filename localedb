@@ -38,11 +38,10 @@
 
 set -e
 
-declare -r is_prod=0
 declare -r is_verbose=1
 
-declare -r pg_host=localhost
-declare -r pg_port=5433
+declare -r pg_host=db
+declare -r pg_port=5432
 declare -r pg_schema_main=main
 declare -r pg_schema_dis=dis
 declare -r pg_schema_geo=geo
@@ -53,22 +52,14 @@ declare -r pg_pwd=sa
 declare -t pg_conn_str=postgresql://${pg_usr}:${pg_pwd}@${pg_host}:${pg_port}/${pg_db}
     # ?sslmode=require
 
-declare -r dir_root=$HOME/.localedb
-declare -r dir_dl_dis=$dir_root/dl/dis
-declare -r dir_dl_geo=$dir_root/dl/geo
-declare -r dir_dl_pop=$dir_root/dl/pop
-declare -r dir_rt=$dir_root/rt
-declare -r dir_script=$dir_root/script
+declare -r dir_root=/usr/share/localedb
+declare -r dir_dl_dis=$dir_root/data/dl/dis
+declare -r dir_dl_geo=$dir_root/data/dl/geo
+declare -r dir_dl_pop=$dir_root/data/dl/pop
+declare -r dir_rt=$dir_root/data/rt
+declare -r dir_script=$dir_root
 declare -r dir_pg_data=$dir_root/pg
-
-declare -r dir_root_docker=/mnt/localedb
-declare -r dir_rt_docker=$dir_root_docker/rt
-declare -r dir_script_docker=$dir_root_docker/script
-declare -r dir_pg_data_docker=/var/lib/postgresql/data
-
-declare -r docker_img=timescale/timescaledb-postgis:latest-pg12
-#declare -r docker_img=postgis/postgis
-declare -r docker_cont=localedb
+declare -r dir_schemas=/usr/share/localedb/schemas
 
 declare -r self_name=$(basename $0)
 declare -r self_path=$(dirname $0)
@@ -80,39 +71,16 @@ declare -r usage="Usage: $self_name $cmd"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-is_cmd() { command -v $1 > /dev/null 2>&1 && return 0 || return 1; }
 
-if is_cmd curl; then
-    declare -r cmd_dl="curl -sO"
-elif is_cmd wget; then
-    declare -r cmd_dl="wget -q"
-fi
+declare -r cmd_dl="wget -q"
 
-if [ $is_prod == 1 ]; then
-    ! is_cmd curl      && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
-    ! is_cmd psql      &&                  echo "Dependency unmet: psql"         && exit 1
-    ! is_cmd shp2pgsql &&                  echo "Dependency unmet: shp2pgsql"    && exit 1
-    ! is_cmd python3   &&                  echo "Dependency unmet: python3"      && exit 1
-
-    declare -r cmd_dropdb="env PGPASSWORD=$pg_pwd dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db"
-    declare -r cmd_create_db="env PGPASSWORD=$pg_pwd createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
-    declare -r cmd_pg_isready="env PGPASSWORD=$pg_pwd pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
-    declare -r cmd_psql="env PGOPTIONS='-c client_min_messages=WARNING' psql $pg_conn_str -q"
-    declare -r cmd_psql_it="env PGOPTIONS='-c client_min_messages=WARNING' psql $pg_conn_str -q"
-    declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $dir_rt"
-    declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
-else
-    ! is_cmd curl   && ! is_cmd wget && echo "Dependency unmet: curl or wget" && exit 1
-    ! is_cmd docker &&                  echo "Dependency unmet: docker"       && exit 1
-    
-    declare -r cmd_dropdb="docker exec -e PGPASSWORD=$pg_pwd $docker_cont dropdb -U $pg_usr --if-exists $pg_db"
-    declare -r cmd_createdb="docker exec -e PGPASSWORD=$pg_pwd $docker_cont createdb -U $pg_usr $pg_db"
-    declare -r cmd_pg_isready="docker exec -e PGPASSWORD=$pg_pwd $docker_cont pg_isready -t 60 -q -U $pg_usr"
-    declare -r cmd_psql="docker exec $docker_cont psql postgresql://${pg_usr}:${pg_pwd}@localhost:5432/${pg_db} -q"
-    declare -r cmd_psql_it="docker exec -it $docker_cont psql postgresql://${pg_usr}:${pg_pwd}@localhost:5432/${pg_db} -q"
-    declare -r cmd_py="docker exec $docker_cont python3 $dir_script_docker/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $dir_rt_docker"
-    declare -r cmd_shp2pgsql="docker exec $docker_cont shp2pgsql -W latin1 -a -s 4269 $dir_rt_docker"
-fi
+declare -r cmd_dropdb="dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db"
+declare -r cmd_createdb="createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
+declare -r cmd_pg_isready="pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
+declare -r cmd_psql="psql $pg_conn_str -q"
+declare -r cmd_psql_it="psql $pg_conn_str -q"
+declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $dir_rt"
+declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -135,311 +103,17 @@ declare -a url_pop=("https://gitlab.com/momacs/dataset-pop-us-2010-midas/-/raw/m
 # COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University
 # https://github.com/CSSEGISandData/COVID-19
 
-declare -r sql_schema_dis="
-    SET client_min_messages TO WARNING;
-    BEGIN;
-    
-    DROP SCHEMA IF EXISTS $pg_schema_dis CASCADE;
-    CREATE SCHEMA $pg_schema_dis;
-    
-    CREATE TABLE $pg_schema_dis.disease (  -- tables referenced from hypertables cannot be unlogged
-    id    smallserial PRIMARY KEY,
-    name  text NOT NULL UNIQUE
-    );
-    
-    CREATE TABLE $pg_schema_dis.dyn (  -- hypertables cannot be unlogged
-    disease_id  integer NOT NULL REFERENCES $pg_schema_dis.disease (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    locale_id   integer NOT NULL REFERENCES $pg_schema_main.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    day         date NOT NULL,
-    day_i       smallint NOT NULL,  -- day from the beginning of data collection (i.e., 2020.01.22)
-    n_conf      integer,            -- number of confirmed cases
-    n_dead      integer,            -- number of deaths
-    n_rec       integer,            -- number of recovered cases
-    PRIMARY KEY (disease_id, locale_id, day)  -- https://github.com/timescale/timescaledb/issues/113
-    );
-    
-    --CREATE TABLE $pg_schema_dis.mcm (  -- medical countermeasures (biologics, drugs, devices)
-    --);
-    
-    CREATE TABLE $pg_schema_dis.npi_type (  -- tables referenced from hypertables cannot be unlogged
-    id   integer PRIMARY KEY,
-    name text NOT NULL
-    );
-    
-    CREATE TABLE $pg_schema_dis.npi (  -- hypertables cannot be unlogged
-    disease_id     integer NOT NULL REFERENCES $pg_schema_dis.disease (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    locale_id      integer NOT NULL REFERENCES $pg_schema_main.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    type_id        integer NOT NULL REFERENCES $pg_schema_dis.npi_type (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    begin_date     date NOT NULL,  -- renamed col from: start_date
-    end_date       date,
-    begin_citation text,           -- renamed col from: citation
-    begin_note     text,           -- renamed col from: note
-    end_citation   text,           -- renamed col from: re-opening_citation
-    end_note       text,           -- renamed col from: re-opening_note
-    PRIMARY KEY (disease_id, locale_id, type_id, begin_date)  -- https://github.com/timescale/timescaledb/issues/113
-    );
-    
-    SELECT create_hypertable('$pg_schema_dis.npi', 'begin_date');
-    SELECT create_hypertable('$pg_schema_dis.dyn', 'day');
-    
-    CREATE INDEX ON $pg_schema_dis.dyn (disease_id, locale_id, day DESC);
-    
-    --SELECT create_hypertable('$pg_schema_dis.dyn', 'd', migrate_data => true);
-    
-    COMMIT;
-"
-
+declare -r sql_schema_dis="$(PG_SCHEMA_DIS=${pg_schema_dis} PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_dis}.schema)"
 
 # ----------------------------------------------------------------------------------------------------------------------
-declare -r sql_schema_geo="
-    SET client_min_messages TO WARNING;
-    BEGIN;
-    
-    DROP SCHEMA IF EXISTS $pg_schema_geo CASCADE;
-    CREATE SCHEMA $pg_schema_geo;
-    
-    CREATE SEQUENCE IF NOT EXISTS geo.st_gid_seq;
-    CREATE SEQUENCE IF NOT EXISTS geo.co_gid_seq;
-    CREATE SEQUENCE IF NOT EXISTS geo.tr_gid_seq;
-    CREATE SEQUENCE IF NOT EXISTS geo.bg_gid_seq;
-    CREATE SEQUENCE IF NOT EXISTS geo.bl_gid_seq;
-    
-    CREATE UNLOGGED TABLE $pg_schema_geo.st (
-    gid        int4 PRIMARY KEY DEFAULT nextval('geo.st_gid_seq'::regclass),
-    region10   varchar(2),
-    division10 varchar(2),
-    statefp10  varchar(2),
-    statens10  varchar(8),
-    geoid10    varchar(2),
-    stusps10   varchar(2),
-    name10     varchar(100),
-    lsad10     varchar(2),
-    mtfcc10    varchar(5),
-    funcstat10 varchar(1),
-    aland10    FTDouble(14,0),  --numeric(14,0),  --float8,
-    awater10   FTDouble(14,0),  --numeric(14,0),  --float8,
-    intptlat10 varchar(11),
-    intptlon10 varchar(12),
-    geom       geometry
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_geo.co (
-    gid        int4 PRIMARY KEY DEFAULT nextval('geo.co_gid_seq'::regclass),
-    statefp10  varchar(2),
-    countyfp10 varchar(3),
-    countyns10 varchar(8),
-    geoid10    varchar(5),
-    name10     varchar(100),
-    namelsad10 varchar(100),
-    lsad10     varchar(2),
-    classfp10  varchar(2),
-    mtfcc10    varchar(5),
-    csafp10    varchar(3),
-    cbsafp10   varchar(5),
-    metdivfp10 varchar(5),
-    funcstat10 varchar(1),
-    aland10    numeric(14,0),  --float8,
-    awater10   numeric(14,0),  --float8,
-    intptlat10 varchar(11),
-    intptlon10 varchar(12),
-    geom       geometry
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_geo.tr (
-    gid        int4 PRIMARY KEY DEFAULT nextval('geo.tr_gid_seq'::regclass),
-    statefp10  varchar(2),
-    countyfp10 varchar(3),
-    tractce10  varchar(6),
-    geoid10    varchar(11),
-    name10     varchar(7),
-    namelsad10 varchar(20),
-    mtfcc10    varchar(5),
-    funcstat10 varchar(1),
-    aland10    numeric(14,0),  --float8,
-    awater10   numeric(14,0),  --float8,
-    intptlat10 varchar(11),
-    intptlon10 varchar(12),
-    geom       geometry
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_geo.bg (
-    gid        int4 PRIMARY KEY DEFAULT nextval('geo.bg_gid_seq'::regclass),
-    statefp10  varchar(2),
-    countyfp10 varchar(3),
-    tractce10  varchar(6),
-    blkgrpce10 varchar(1),
-    geoid10    varchar(12),
-    namelsad10 varchar(13),
-    mtfcc10    varchar(5),
-    funcstat10 varchar(1),
-    aland10    numeric(14,0),  --float8,
-    awater10   numeric(14,0),  --float8,
-    intptlat10 varchar(11),
-    intptlon10 varchar(12),
-    geom       geometry
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_geo.bl (
-    gid        int4 PRIMARY KEY DEFAULT nextval('geo.bl_gid_seq'::regclass),
-    statefp10  varchar(2),
-    countyfp10 varchar(3),
-    tractce10  varchar(6),
-    blockce10  varchar(4),
-    geoid10    varchar(15),
-    name10     varchar(10),
-    mtfcc10    varchar(5),
-    ur10       varchar(1),
-    uace10     varchar(5),
-    uatyp10    varchar(1),
-    funcstat10 varchar(1),
-    aland10    numeric(14,0),  --float8,
-    awater10   numeric(14,0),  --float8,
-    intptlat10 varchar(11),
-    intptlon10 varchar(12),
-    geom       geometry
-    );
-    
-    CREATE INDEX st__geom_idx ON $pg_schema_geo.st USING GIST(geom);
-    CREATE INDEX co__geom_idx ON $pg_schema_geo.co USING GIST(geom);
-    CREATE INDEX tr__geom_idx ON $pg_schema_geo.tr USING GIST(geom);
-    CREATE INDEX bg__geom_idx ON $pg_schema_geo.bg USING GIST(geom);
-    CREATE INDEX bl__geom_idx ON $pg_schema_geo.bl USING GIST(geom);
-    
-    COMMIT;
-"
-
+declare -r sql_schema_geo="$(PG_SCHEMA_GEO=${pg_schema_geo} envsubst < ${dir_schemas}/${pg_schema_geo}.schema)"
 
 # ----------------------------------------------------------------------------------------------------------------------
-declare -r sql_schema_main="
-    SET client_min_messages TO WARNING;
-    BEGIN;
-    
-    DROP SCHEMA IF EXISTS $pg_schema_main CASCADE;
-    CREATE SCHEMA $pg_schema_main;
-    
-    CREATE TABLE $pg_schema_main.locale (  -- tables referenced from hypertables cannot be unlogged
-    id        integer PRIMARY KEY,
-    iso2      char(2),           -- ISO 3166-1 alpha-2 country code
-    iso3      char(3),           -- ISO 3166-1 alpha-3 country code
-    iso_num   integer,           -- ISO 3166-1 numeric country code
-    fips      text,              -- NULL for non-US locales (i.e., not a FIPS country code)
-    admin0    text NOT NULL,     -- country
-    admin1    text,              -- principal administrative subdivision (e.g., province or state)
-    admin2    text,              -- further administrative subdivision (e.g., US county)
-    lat       double precision,  -- wgs84
-    long      double precision,  -- ^
-    coords    geometry,
-    pop       integer,
-    UNIQUE (iso2, iso3, iso_num, admin0, admin1, admin2)
-    );
-    
-    --https://download.geonames.org/export/dump/countryInfo.txt
-    --area
-    --continent
-    --lang
-    --borders
-    
-    --https://download.geonames.org/export/dump/readme.txt
-    --geonameid
-    --feature class  -- http://www.geonames.org/export/codes.html
-    --feature code   -- ^
-    --timezone       -- https://download.geonames.org/export/dump/timeZones.txt
-    
-    COMMIT;
-"
-
+declare -r sql_schema_main="$(PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_main}.schema)"
 
 # ----------------------------------------------------------------------------------------------------------------------
 # The schema of the original synthetic population data has been updated (see comments below)
-
-declare -r sql_schema_pop="
-    SET client_min_messages TO WARNING;
-    BEGIN;
-    
-    DROP SCHEMA IF EXISTS $pg_schema_pop CASCADE;
-    CREATE SCHEMA $pg_schema_pop;
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.school (  -- tbl renamed from: schools
-    id      integer PRIMARY KEY,          -- col renamed from: sp_id
-    st_fips varchar(2),                   -- col added
-    stco    text NOT NULL,
-    lat     double precision NOT NULL,    -- col renamed from: latitude
-    long    double precision NOT NULL,    -- col renamed from: longitude
-    coords  geometry                      -- col added
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.hospital (    -- tbl renamed from: hospitals
-    id            integer PRIMARY KEY,        -- col renamed from: hosp_id
-    st_fips       varchar(2),                 -- col added
-    worker_cnt    smallint NOT NULL,
-    physician_cnt smallint NOT NULL,
-    bed_cnt       smallint NOT NULL,
-    lat           double precision NOT NULL,  -- col renamed from: latitude
-    long          double precision NOT NULL,  -- col renamed from: longitude
-    coords        geometry                    -- col added
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.household (  -- tbl renamed from: households
-    id       integer PRIMARY KEY,            -- col renamed from: hh_id
-    st_fips  varchar(2),                     -- col added
-    stcotrbg text NOT NULL,
-    race_id  smallint NOT NULL,              -- col renamed from: hh_race
-    income   integer NOT NULL,               -- col renamed from: hh_income
-    lat      double precision NOT NULL,      -- col renamed from: latitude
-    long     double precision NOT NULL,      -- col renamed from: longitude
-    coords   geometry                        -- col added
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.gq (
-    id         integer PRIMARY KEY,        -- col renamed from: sp_id
-    st_fips    varchar(2),                 -- col added
-    type       text NOT NULL,              -- col renamed from: gq_type
-    stcotrbg   text NOT NULL,
-    person_cnt smallint NOT NULL,
-    lat        double precision NOT NULL,  -- col renamed from: latitude
-    long       double precision NOT NULL,  -- col renamed from: longitude
-    coords     geometry                    -- col added
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.workplace (  -- tbl renamed from: workplaces
-    id      integer PRIMARY KEY,             -- col renamed from: sp_id
-    st_fips varchar(2),                      -- col added
-    lat     double precision NOT NULL,       -- col renamed from: latitude
-    long    double precision NOT NULL,       -- col renamed from: longitude
-    coords  geometry                         -- col added
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.person (                                                                         -- tbl renamed from: people
-    id           integer PRIMARY KEY,                                                                            -- col renamed from: sp_id
-    household_id integer NOT NULL REFERENCES $pg_schema_pop.household (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- col renamed from: sp_hh_id
-    age          smallint NOT NULL,
-    sex          char(1) NOT NULL,
-    race_id      smallint NOT NULL,                                                                        -- col renamed from: race
-    relate_id    smallint NOT NULL,                                                                        -- col renamed from: relate
-    school_id    integer REFERENCES $pg_schema_pop.school    (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    workplace_id integer REFERENCES $pg_schema_pop.workplace (id) ON DELETE CASCADE ON UPDATE CASCADE
-    );
-    
-    CREATE UNLOGGED TABLE $pg_schema_pop.gq_person (                                                         -- tbl renamed from: gq_people
-    id     integer NOT NULL PRIMARY KEY,                                                            -- col renamed from: sp_id
-    gq_id  integer NOT NULL REFERENCES $pg_schema_pop.gq (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- col renamed from: sp_gq_id
-    age    smallint NOT NULL,
-    sex    char(1) NOT NULL
-    );
-    
-    CREATE INDEX person__household_id__fk_idx ON $pg_schema_pop.person    (household_id);
-    CREATE INDEX person__school_id__fk_idx    ON $pg_schema_pop.person    (school_id);
-    CREATE INDEX person__workplace_id__fk_idx ON $pg_schema_pop.person    (workplace_id);
-    CREATE INDEX gq_person__gq_id__fk_idx     ON $pg_schema_pop.gq_person (gq_id);
-    
-    CREATE INDEX school__geom_idx    ON $pg_schema_pop.school    USING GIST(coords);
-    CREATE INDEX hospital__geom_idx  ON $pg_schema_pop.hospital  USING GIST(coords);
-    CREATE INDEX household__geom_idx ON $pg_schema_pop.household USING GIST(coords);
-    CREATE INDEX gq__geom_idx        ON $pg_schema_pop.gq        USING GIST(coords);
-    CREATE INDEX workplace__geom_idx ON $pg_schema_pop.workplace USING GIST(coords);
-    
-    COMMIT;
-"
+declare -r sql_schema_pop="$(PG_SCHEMA_POP=${pg_schema_pop} envsubst < ${dir_schemas}/${pg_schema_pop}.schema)"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -460,9 +134,7 @@ db_analyze() {
 #
 db_init() {
     [ "$1" != "1" ] && req_y "Reinitialize the database?"
-    
-    ! is_prod && docker_init_py
-    
+
     echo -n "Initializing data structures..."
     $cmd_dropdb > $out #2>&1
     $cmd_createdb > $out #2>&1
@@ -474,7 +146,7 @@ db_init() {
     $cmd_psql -c "$sql_schema_pop"  > $out #2>&1
     $cmd_psql -c "VACUUM FULL;"
     echo " done"
-    
+
     echo -n "Loading locales..."
     $cmd_py load-main
     echo " done"
@@ -516,35 +188,6 @@ db_init_pop() {
     [ "$2" != "0" ] || $cmd_psql -c "VACUUM FULL;"
 }
 
-
-# ----------------------------------------------------------------------------------------------------------------------
-docker_init_pg_client() {
-    if [ $(docker exec $docker_cont which shp2pgsql | wc | awk 'END {print $1}' | bc) == 0 ]; then
-        echo -n "Initializing the container..."
-        docker exec $docker_cont apt update 1> $out #2>&1
-        docker exec $docker_cont apt install -y --no-install-recommends postgis 1> $out #2>&1  # shp2pgsql
-        echo " done"
-    fi
-}
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-docker_init_py() {
-    if [ $(docker exec $docker_cont which python3 | wc | awk 'END {print $1}' | bc) == 0 ]; then
-        echo -n 'Initializing Python in the container...'
-        #docker exec $docker_cont apt update 1> $out #2>&1
-        #docker exec $docker_cont apt install -y python3 python3-pip 1> $out #2>&1
-        docker exec $docker_cont apk update 1> $out #2>&1
-        docker exec $docker_cont apk add python3 python3-dev py3-pip gcc musl-dev linux-headers 1> $out #2>&1
-        #docker exec $docker_cont apk --no-cache --update-cache add gcc gfortran build-base wget freetype-dev libpng-dev openblas-dev
-            # for numpy, scipy, and pandas
-        docker exec $docker_cont apk add python3 python3-dev py3-pip gcc musl-dev linux-headers 1> $out #2>&1
-        docker exec $docker_cont pip3 install psycopg2-binary 1> $out #2>&1
-        echo " done"
-    fi
-}
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 #
 # $1: dir
@@ -562,7 +205,7 @@ fs_download_unzip() {
 #
 fs_upd() {
     local fname=$(basename $2)
-    
+
     cd $1
     rm -f ./${fname}.upd
     [ -f ./$fname ] && mv -f ./$fname ./${fname}.upd
@@ -578,8 +221,6 @@ get_int() { echo $($cmd_psql -t -c "$1" | sed -e '$d' | bc); }
 
 # ----------------------------------------------------------------------------------------------------------------------
 is_db_tbl() { echo $($cmd_psql -t -c "SELECT CASE WHEN (SELECT to_regclass('$1.$2')) IS NULL THEN 0 ELSE 1 END;"); }
-is_docker_cont() { [ $(docker ps | grep $docker_cont | wc -l | bc) -eq 0 ] && return 1 || return 0; }
-is_prod() { [ $is_prod == 1 ] && return 0 || return 1; }
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -592,9 +233,9 @@ is_prod() { [ $is_prod == 1 ] && return 0 || return 1; }
 #
 proc_item_geo() {
     [ "$3" == "st" -o "$3" == "co" ] && [ $(is_db_tbl $pg_schema_geo $3) -eq 1 ] && [ $(get_tbl_rec_cnt $pg_schema_geo $3) -gt 0 ] && return 0
-    
+
     local fname=$(basename $2 .zip)
-    
+
     # Download:
     local attempt=""
     local i=1
@@ -610,19 +251,19 @@ proc_item_geo() {
         fi
         cd - > /dev/null
     done
-    
+
     # Process and load:
     echo -e -n "\r$1  loading...                    \b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
-    
+
     mkdir -p $dir_rt
     rm -fr $dir_rt/*
-    
+
     unzip -q $dir_dl_geo/$fname.zip -d $dir_rt
-    
+
     [ "$4" != "" ] && $cmd_psql -c "DELETE FROM $pg_schema_geo.$3 WHERE statefp10 = '$4'"
     #$cmd_shp2pgsql/$fname.shp $pg_schema_geo.$3 2> $out | $cmd_psql > $out
     $cmd_shp2pgsql/$fname.shp $pg_schema_geo.$3 | $cmd_psql
-    
+
     rm -fr $dir_rt/*
     echo -e "\r$1  done                                         "
 }
@@ -637,7 +278,7 @@ proc_item_geo() {
 #
 proc_item_pop() {
     local fname=$(basename $2 .zip)
-    
+
     # Download:
     local attempt=""
     local i=1
@@ -653,18 +294,18 @@ proc_item_pop() {
         fi
         cd - > /dev/null
     done
-    
+
     # Process and load:
     echo -e -n "\r$1  loading...                    \b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
-    
+
     mkdir -p $dir_rt
     rm -fr $dir_rt/*
-    
+
     unzip -q $dir_dl_pop/$fname.zip -d $dir_rt
-    
+
     #$cmd_py load-pop-state $3 > $out
     $cmd_py load-pop-state $3
-    
+
     rm -fr $dir_rt/*
     echo -e "\r$1  done                                         "
 }
@@ -675,7 +316,7 @@ req_argn() { [ $1 -lt $2 ] && { echo "$usage $3"; exit 1; }; return 0; }
 req_cmd() { command -v $1 >/dev/null 2>&1 || { echo >&2 "Command $1 not found."; exit 1; }; return 0; }
 req_state_name() { [ "$1" != "-" ] && [[ ! " ${st_name[@]} " =~ " $1 " ]] && { echo >&2 "No state '$1' found."; exit 1; }; return 0; }
 req_y() { read -p "$1 [y/n] " res; [ "$res" != "y" -a "$res" != "Y" ] && exit 1; return 0; }
-req_docker_cont() { ! is_prod && ! is_docker_cont && { echo "Docker container is not running."; exit 1; }; return 0; }
+
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -686,8 +327,7 @@ st_name2fips() { i=$(st_name2idx $1); echo "${st_fips[@]:$i:1}"; }
 # ----------------------------------------------------------------------------------------------------------------------
 case "$cmd" in
     "bash")
-        is_prod && { echo "Command only available on development environment."; exit 1; }
-        docker exec -it $docker_cont bash
+        bash
         ;;
     "db")
         case "$2" in
@@ -719,9 +359,9 @@ case "$cmd" in
                     "dis")
                         req_argn $# 4 "$2 $3 <c19|h1n1> [force?]"
                         [ "$4" != "c19" ] && [ "$4" != "h1n1" ] && { echo "Invalid disease: $3"; exit 1; }
-                        
+
                         [ "$5" != "1" ] && req_y "Remove all data for disease $4?"
-                        
+
                         $cmd_psql -c "
                             BEGIN;
                             DELETE FROM $pg_schema_dis.disease WHERE name = '$4';
@@ -734,9 +374,9 @@ case "$cmd" in
                     "state")
                         req_argn $# 4 "$2 $3 <state> [force?]"
                         req_state_name $4
-                        
+
                         [ "$5" != "1" ] && req_y "Remove all data for $4?"
-                        
+
                         $0 $cmd rm-state-geo $4 1 0
                         $0 $cmd rm-state-pop $4 1 0
                         db_analyze
@@ -744,9 +384,9 @@ case "$cmd" in
                     "state-geo")
                         req_argn $# 4 "$2 $3 <state> [force?]"
                         req_state_name $4
-                        
+
                         [ "$5" != "1" ] && req_y "Remove geographic data for $4?"
-                        
+
                         fips=$(st_name2fips $4)
                         $cmd_psql -c "
                             BEGIN;
@@ -760,9 +400,9 @@ case "$cmd" in
                     "state-pop")
                         req_argn $# 4 "$2 $3 <state> [force?]"
                         req_state_name $4
-                        
+
                         [ "$5" != "1" ] && req_y "Remove population data for $4?"
-                        
+
                         fips=$(st_name2fips $4)
                         $cmd_psql -c "
                             BEGIN;
@@ -814,71 +454,63 @@ case "$cmd" in
         echo "  info         Display filesystem, database server, and data information"
         echo "  load         Load data"
         echo "  setup        Setup and start LocaleDB"
-        echo "  start        Start LocaleDB"
-        echo "  stop         Stop LocaleDB"
-        echo "  update       Update this command line utility"
-        echo "  uninstall    Uninstall LocaleDB and optionally this command line utility"
         ;;
     "load")
         case "$2" in
             "dis")
                 req_argn $# 3 "$2 <c19|h1n1>"
                 [ "$3" != "c19" ] && echo "Invalid disease: $3" && exit 1
-                
-                docker_init_py
+
                 $cmd_py load-dis $3
                 ;;
             "geo")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
                 req_state_name $3
 
-                docker_init_pg_client
-                
                 if [ "$3" == "-" ]; then
                     db_init_geo 1
-                    
+
                     proc_item_geo "US states      " $url_geo_st st
                     proc_item_geo "US counties    " $url_geo_co co
-                    
+
                     for fips in "${st_fips[@]}"; do proc_item_geo "$3 tracts      " "${url_geo_tr[0]}$fips${url_geo_tr[1]}" tr $fips; done
                     for fips in "${st_fips[@]}"; do proc_item_geo "$3 block groups" "${url_geo_bg[0]}$fips${url_geo_bg[1]}" bg $fips; done
                     for fips in "${st_fips[@]}"; do proc_item_geo "$3 blocks      " "${url_geo_bl[0]}$fips${url_geo_bl[1]}" bl $fips; done
                 else
                     fips=$(st_name2fips $3)
-                    
+
                     if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_geo.tr WHERE statefp10 = '$fips';") -gt 0 ]; then
                         conf_yn "Geographic data for that state already exists. Remove it and load again?" || exit 0
                     fi
-                    
+
                     proc_item_geo "US states      " $url_geo_st st
                     proc_item_geo "US counties    " $url_geo_co co
-                    
+
                     proc_item_geo "$3 tracts      " "${url_geo_tr[0]}$fips${url_geo_tr[1]}" tr $fips
                     proc_item_geo "$3 block groups" "${url_geo_bg[0]}$fips${url_geo_bg[1]}" bg $fips
                     proc_item_geo "$3 blocks      " "${url_geo_bl[0]}$fips${url_geo_bl[1]}" bl $fips
                 fi
-                
+
                 db_analyze
                 ;;
             "pop")
                 req_argn $# 3 "$2 <two-letter state code or - for all> [force?]"
                 req_state_name $3
-                
-                docker_init_py
-                
+
+
                 if [ "$3" == "-" ]; then
                     db_init_pop 1
                     for st in "${st_name[@]}"; do proc_item_pop "$st" "${url_pop[0]}$st${url_pop[1]}" $(st_name2fips $st); done
                 else
                     fips=$(st_name2fips $3)
-                    
+
                     if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_pop.household WHERE st_fips = '$fips';") -gt 0 ]; then
                         conf_yn "Population data for that state already exists. Remove it and load again?" || exit 0
                     fi
-                    
+
                     proc_item_pop "$3" "${url_pop[0]}$3${url_pop[1]}" $fips
                 fi
-                
+
                 db_analyze
                 ;;
             *) echo "$usage $2{dis-dyn geo pop}" && exit 1;;
@@ -886,7 +518,6 @@ case "$cmd" in
     "info")
         case "$2" in
             "all")
-                $0 $cmd env
                 $0 $cmd fs
                 $0 $cmd db
                 $0 $cmd data
@@ -957,20 +588,16 @@ case "$cmd" in
                 echo "    Password  $pg_pwd"
                 echo "    Conn str  $pg_conn_str"
                 ;;
-            "env")
-                echo "Environment"
-                echo "    Production  $is_prod"
-                ;;
             "fs")
                 echo "Directory structure"
                 echo "    Root               $dir_root         $(du -sh $dir_root | awk 'END {print $1}')"
                 echo "    Runtime            $dir_rt      $(du -sh $dir_rt | awk 'END {print $1}')"
-                echo "    PostgreSQL data    $dir_pg_data      $(du -sh $dir_pg_data | awk 'END {print $1}')"
+                #echo "    PostgreSQL data    $dir_pg_data      $(du -sh $dir_pg_data | awk 'END {print $1}')"
                 echo "    Disease data       $dir_dl_dis  $(du -sh $dir_dl_dis | awk 'END {print $1}')"
                 echo "    Geographic data    $dir_dl_geo  $(du -sh $dir_dl_geo | awk 'END {print $1}')"
                 echo "    Population data    $dir_dl_pop  $(du -sh $dir_dl_pop | awk 'END {print $1}')"
                 ;;
-            *) echo "$usage $2{all data db env fs}" && exit 1;;
+            *) echo "$usage $2{all data db fs}" && exit 1;;
         esac;;
     "setup")
         # Filesystem:
@@ -980,45 +607,8 @@ case "$cmd" in
         mkdir -p $dir_dl_pop
         mkdir -p $dir_rt
         mkdir -p $dir_script
-        mkdir -p $dir_pg_data
-        
-        # DB server:
-        if is_prod; then
-            echo "In production mode, this utility does not manage the local PostgreSQL instance in an attempt not to interfere with management operations that might already be in place. To setup LocaleDB on a server, bring the server up, install TimescaleDB and PostGIS extensions, and run:"
-            echo ""
-            echo "$0 db init 1"
-        else
-            is_docker_cont && $0 stop
-            docker pull $docker_img
-            $0 start
-            docker exec $docker_cont sh -c 'echo "shared_preload_libraries = ''timescaledb''" >> /var/lib/postgresql/data/postgresql.conf'
-            db_init 1
-        fi
+        #mkdir -p $dir_pg_data
+        db_init 1
         ;;
-    "start")
-        is_prod && exit 0
-        is_docker_cont && echo "LocaleDB already running" && exit 0
-        docker run --rm --name $docker_cont -e POSTGRES_USER=$pg_usr -e POSTGRES_PASSWORD=$pg_pwd -d -p $pg_port:5432 -v $dir_pg_data:/$dir_pg_data_docker -v $dir_rt:$dir_rt_docker -v $dir_script:$dir_script_docker $docker_img > $out
-        echo -n "Waiting for the DB server..."
-        sleep 5  # wait for the container to spin up
-        $cmd_pg_isready && echo " ok" || echo " error"
-        ;;
-    "stop")
-        is_prod && exit 0
-        ! is_docker_cont && echo "LocaleDB is not running" && exit 0
-        docker stop $docker_cont > $out
-        ;;
-    "update")
-        fs_upd $HOME/bin https://raw.githubusercontent.com/momacs/localedb/master/localedb
-        fs_upd $dir_script https://raw.githubusercontent.com/momacs/localedb/master/localedb_man.py
-        chmod a+x $HOME/bin/localedb
-        ;;
-    "uninstall")
-        req_y "This will remove downloaded data and the contents of the '$pg_db' database. Continue?"
-        $0 stop
-        is_prod && $cmd_dropdb > $out #2>&1
-        rm -fr $dir_root
-        conf_yn "Remove this command line management tool?" && rm $0 || echo "Tool retained"
-        ;;
-    *) echo "Commands: db fs help info load setup start stop update uninstall";;
+    *) echo "Commands: db fs help info load setup";;
 esac

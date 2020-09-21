@@ -1,0 +1,53 @@
+
+SET client_min_messages TO WARNING;
+BEGIN;
+
+DROP SCHEMA IF EXISTS $PG_SCHEMA_DIS CASCADE;
+CREATE SCHEMA $PG_SCHEMA_DIS;
+
+CREATE TABLE $PG_SCHEMA_DIS.disease (  -- tables referenced from hypertables cannot be unlogged
+id    smallserial PRIMARY KEY,
+name  text NOT NULL UNIQUE
+);
+
+CREATE TABLE $PG_SCHEMA_DIS.dyn (  -- hypertables cannot be unlogged
+disease_id  integer NOT NULL REFERENCES $PG_SCHEMA_DIS.disease (id) ON DELETE CASCADE ON UPDATE CASCADE,
+locale_id   integer NOT NULL REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
+day         date NOT NULL,
+day_i       smallint NOT NULL,  -- day from the beginning of data collection (i.e., 2020.01.22)
+n_conf      integer,            -- number of confirmed cases
+n_dead      integer,            -- number of deaths
+n_rec       integer,            -- number of recovered cases
+PRIMARY KEY (disease_id, locale_id, day)  -- https://github.com/timescale/timescaledb/issues/113
+);
+
+--CREATE TABLE $PG_SCHEMA_DIS.mcm (  -- medical countermeasures (biologics, drugs, devices)
+--);
+
+CREATE TABLE $PG_SCHEMA_DIS.npi_type (  -- tables referenced from hypertables cannot be unlogged
+id   integer PRIMARY KEY,
+name text NOT NULL
+);
+
+CREATE TABLE $PG_SCHEMA_DIS.npi (  -- hypertables cannot be unlogged
+disease_id     integer NOT NULL REFERENCES $PG_SCHEMA_DIS.disease (id) ON DELETE CASCADE ON UPDATE CASCADE,
+LOCALE_ID      INTEGER NOT NULL REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
+type_id        integer NOT NULL REFERENCES $PG_SCHEMA_DIS.npi_type (id) ON DELETE CASCADE ON UPDATE CASCADE,
+begin_date     date NOT NULL,  -- renamed col from: start_date
+end_date       date,
+begin_citation text,           -- renamed col from: citation
+begin_note     text,           -- renamed col from: note
+end_citation   text,           -- renamed col from: re-opening_citation
+end_note       text,           -- renamed col from: re-opening_note
+PRIMARY KEY (disease_id, locale_id, type_id, begin_date)  -- https://github.com/timescale/timescaledb/issues/113
+);
+
+SELECT create_hypertable('$PG_SCHEMA_DIS.npi', 'begin_date');
+SELECT create_hypertable('$PG_SCHEMA_DIS.dyn', 'day');
+
+CREATE INDEX ON $PG_SCHEMA_DIS.dyn (disease_id, locale_id, day DESC);
+
+--SELECT create_hypertable('$PG_SCHEMA_DIS.dyn', 'd', migrate_data => true);
+
+COMMIT;
+

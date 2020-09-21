@@ -1,0 +1,28 @@
+SET client_min_messages TO WARNING;
+BEGIN;
+
+DROP SCHEMA IF EXISTS $PG_SCHEMA_NPI CASCADE;
+CREATE SCHEMA $PG_SCHEMA_NPI;
+
+CREATE TABLE $PG_SCHEMA_NPI.type (  -- tables referenced from hypertables cannot be unlogged
+id   integer PRIMARY KEY,
+name text NOT NULL
+);
+
+CREATE TABLE $PG_SCHEMA_NPI.npi (  -- hypertables cannot be unlogged
+fips           text NOT NULL,
+state          text NOT NULL,
+county         text,
+type_id        integer NOT NULL REFERENCES $PG_SCHEMA_NPI.type (id) ON DELETE CASCADE ON UPDATE CASCADE,
+begin_date     date NOT NULL,  -- renamed col from: start_date
+end_date       date,
+begin_citation text,           -- renamed col from: citation
+begin_note     text,           -- renamed col from: note
+end_citation   text,           -- renamed col from: re-opening_citation
+end_note       text            -- renamed col from: re-opening_note
+);
+
+SELECT create_hypertable('$PG_SCHEMA_NPI.npi', 'begin_date');
+
+COMMIT;
+
