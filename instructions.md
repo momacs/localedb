@@ -1,9 +1,12 @@
 
 
 
-Quick start
+## Quick start
 
 ```
+## Build docker container
+./build-docker.sh
+
 ## Start docker and postgis (may take a minute for postgres to become available)
 docker-compose up -d
 
@@ -25,8 +28,19 @@ docker-compose run --rm localedb info all
 
 
 
-Notes
+## Development
 
+Any changes to the docker image require `./build-docker.sh` to be run to update the image.
+
+Run `docker-compose up -d`
+`localedb` and `localedb_man.py` are mounted as volumes. So any changes will take effect immediatly
+
+`docker-compose run --rm localedb info`, edit file locally, run again and new changes will be present
+
+
+
+
+## Notes
 
 Removed `start stop uninstall update` as they don't really apply when everything is in docker-compose
 
