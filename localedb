@@ -537,6 +537,21 @@ case "$cmd" in
                     ORDER BY COUNT(*) DESC;
                 ")
                 echo "$a"
+                echo "    Flu Vaccinations"
+                echo "        Date range    "$($cmd_psql -t -c "
+                    SELECT CONCAT(MIN(START_YEAR), ' - ', MAX(END_YEAR)) FROM $pg_schema_vax.vax;
+                ")
+                echo "        Avg. Flu vaccination coverage per year"
+                a=$($cmd_psql -t -c "
+                    SELECT Concat('           ', stats.start_year, ':   ', stats.round, '%')
+                    FROM   (SELECT start_year,
+                                   Round(Avg(Cast(coverage AS NUMERIC)), 2)
+                            FROM   $pg_schema_vax.vax
+                            WHERE  coverage NOT LIKE '%NR%'
+                            GROUP  BY start_year
+                            ORDER  BY start_year) AS stats  
+                ") 
+                echo "$a"                                            
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)
