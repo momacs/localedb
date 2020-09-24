@@ -11,7 +11,7 @@ services:
     environment:
       - PGDATA=/var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   localedb:
     image: localedb:0.0.1
