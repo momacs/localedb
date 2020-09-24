@@ -11,11 +11,16 @@ import re
 import sys
 import time
 import urllib.request
+import pandas as pd
+import numpy as np
 
 from abc         import ABC
 from collections import namedtuple
 from pathlib     import Path
+from sqlalchemy  import create_engine
 
+from psycopg2.errors import UniqueViolation
+from sqlalchemy.exc import IntegrityError
 
 # ----------------------------------------------------------------------------------------------------------------------
 def req_argn(n):
@@ -35,7 +40,7 @@ class DBI(object):
     """Database interface.
     """
 
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, cursor_factory=psycopg2.extras.NamedTupleCursor):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, cursor_factory=psycopg2.extras.NamedTupleCursor):
         self.pg_host        = pg_host
         self.pg_port        = pg_port
         self.pg_usr         = pg_usr
@@ -45,6 +50,7 @@ class DBI(object):
         self.pg_schema_geo  = pg_schema_geo
         self.pg_schema_main = pg_schema_main
         self.pg_schema_pop  = pg_schema_pop
+        self.pg_schema_vax  = pg_schema_vax
 
         self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
 
@@ -68,9 +74,10 @@ class Schema(ABC):
     Manages one type of data type.  Data type are compartmentalized into PostgreSQL's schemas.
     """
 
-    def __init__(self, dbi, dpath_rt):
+    def __init__(self, dbi, dpath_rt, engine=None):
         self.dbi = dbi
         self.dpath_rt = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
+        self.engine = engine
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -402,9 +409,156 @@ class PopSchema(Schema):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+class VaxSchema(Schema):
+    """2010-11 through 2018-19 Influenza Seasons Vaccination Coverage Trend Report
+    Original data available here: https://www.cdc.gov/flu/fluvaxview/reportshtml/trends/index.html
+
+    Data mirror: https://world-modelers.s3.amazonaws.com/data/fluvax/CDC_Fluvax.xlsx
+    """
+
+    def process_df_(self, inner_df, df, age=None, race=None):
+        """
+        Processes intermediate vaccination dataframe
+        """
+        proc_dfs = pd.DataFrame()
+        iters = int(inner_df.shape[1]/6)
+        for i in range(iters):
+            df_ = inner_df.iloc[:,i*6:(i+1)*6]
+            date = df_.columns[0].split('.')[0]
+            df_.columns = ['COVERAGE','LL','UL','CI','SAMPLE','TARGET']
+            df_['DATE'] = date
+            df_ = pd.concat([df.iloc[:,0:1],df_], axis=1)
+            df_['AGE'] = age
+            df_['RACE'] = race
+            proc_dfs = proc_dfs.append(df_)
+        return proc_dfs  
+
+    def process_vax_file(self):
+        """
+        Major preprocessing of vaccination data from CDC. 
+        This function performs a major pivot on the CDC data to convert it from a human-readable
+        spreadsheet into a nicely formatted Pandas dataframe.
+        """        
+        df = pd.read_excel('CDC_Fluvax.xlsx', skiprows=2)
+        df_headers = pd.read_excel('CDC_Fluvax.xlsx')[:1]
+        cols_1 = list(df_headers.columns)[1:]
+        cols_2 = list(df_headers.iloc[0])[1:]
+
+        cols_1_ = []
+        cols_1_inds = {}
+        count = 0
+        for i in cols_1:
+            if 'Unnamed' in i:
+                cols_1_.append(None)
+            else:
+                cols_1_.append(i)
+                cols_1_inds[count] = i
+            count += 1        
+                
+        cols_2_ = []
+        cols_2_inds = {}
+        count = 0
+        for i in cols_2:
+            if pd.isna(i):
+                cols_2_.append(None)
+            else:
+                cols_2_.append(i)
+                cols_2_inds[count] = i
+            count += 1
+
+        df_age = df.iloc[:,:721]
+        df_race = pd.concat([df.iloc[:,0:1],df.iloc[:,721:]], axis=1)
+        ages_l = list(cols_2_inds.items())[:15]
+        race_l = list(cols_2_inds.items())[14:]
+        race_l.append((df.shape[1], None))
+
+        age_frames = {}
+        for i in range(len(ages_l)-1):
+            age = ages_l[i][1]
+            start = ages_l[i][0] + 1
+            end = ages_l[i + 1][0] + 1
+            df_ = df_age.iloc[:, start:end]
+            age_frames[age] = df_
+
+        race_frames = {}
+        for i in range(len(race_l)-1):
+            race = race_l[i][1]
+            start = race_l[i][0] + 1 - 720
+            end = race_l[i + 1][0] + 1 - 720
+            df_ = df_race.iloc[:, start:end]
+            race_frames[race] = df_
+
+        out_df = pd.DataFrame()
+        for kk, vv in age_frames.items():    
+            interim_df = self.process_df_(vv, df, age=kk)
+            out_df = out_df.append(interim_df)
+            
+        for kk, vv in race_frames.items():
+            interim_df = self.process_df_(vv, df, race=kk)
+            out_df = out_df.append(interim_df)            
+
+        out_df = out_df.rename(columns={'Names':'LOCALE'})
+        out_df['START_YEAR'] = out_df['DATE'].apply(lambda x: int(x.split('-')[0]))
+        out_df['END_YEAR'] = out_df['DATE'].apply(lambda x: int('20'+ x.split('-')[1]))
+        del(out_df['DATE'])
+
+        # Convert AGE and RACE to categorical variables
+        out_df['AGE'] = pd.Categorical(out_df.AGE)
+        out_df['AGE_ID'] = out_df.AGE.cat.codes
+
+        out_df['RACE'] = pd.Categorical(out_df.RACE)
+        out_df['RACE_ID'] = out_df.RACE.cat.codes
+
+        out_df['RACE_ID'] = out_df.RACE_ID.replace(-1, np.nan)
+        out_df['AGE_ID'] = out_df.AGE_ID.replace(-1, np.nan)
+
+        # Generate lookup tables
+        age_cats = []
+        for kk, vv in dict( enumerate(out_df.AGE.cat.categories )).items():
+            age_cats.append({'id': kk, 'name': vv})
+            
+        race_cats = []
+        for kk, vv in dict( enumerate(out_df.RACE.cat.categories )).items():
+            race_cats.append({'id': kk, 'name': vv})    
+            
+        age_cats_df = pd.DataFrame(age_cats)
+        race_cats_df = pd.DataFrame(race_cats)        
+
+        del(out_df['AGE'])
+        del(out_df['RACE'])
+
+        out_df.columns= out_df.columns.str.lower()
+        age_cats_df.columns= age_cats_df.columns.str.lower()
+        race_cats_df.columns= race_cats_df.columns.str.lower()
+        return out_df, age_cats_df, race_cats_df
+
+    def load_vax(self):
+        """
+        Loads Flu vaccine data to database.
+        Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
+        """
+        urllib.request.urlretrieve('https://world-modelers.s3.amazonaws.com/data/fluvax/CDC_Fluvax.xlsx', 'CDC_Fluvax.xlsx')
+        data, age, race = self.process_vax_file()
+        try:
+            age.to_sql('age', con=self.engine, schema=self.dbi.pg_schema_vax, index=False, if_exists='append')
+            race.to_sql('race', con=self.engine, schema=self.dbi.pg_schema_vax, index=False, if_exists='append')
+            data.to_sql('vax', con=self.engine, schema=self.dbi.pg_schema_vax, index=False, if_exists='append')
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print("Vaccination data is already loaded in LocaleDB.")
+
+
+    def test(self):
+        with self.conn.dbi.cursor() as c:
+            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_vax}.vax;')
+            print(c.fetchone().n)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, dpath_rt):
-        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop)
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, dpath_rt):
+        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax)
+        self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
         self.dpath_rt = dpath_rt
 
     def get_dis(self):
@@ -416,6 +570,9 @@ class LocaleDB(object):
     def get_pop(self):
         return PopSchema(self.dbi, self.dpath_rt)
 
+    def get_vax(self):
+        return VaxSchema(self.dbi, self.dpath_rt, self.engine)        
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -423,18 +580,21 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    if len(sys.argv[1:]) < 11:
+    if len(sys.argv[1:]) < 12:
         print(f'Incorrect number of arguments; at least 11 are required.')
         sys.exit(1)
 
-    if sys.argv[11] == 'load-dis':
+    if sys.argv[12] == 'load-dis':
+        req_argn(13)
+        LocaleDB(*sys.argv[1:12]).get_dis().load_disease(sys.argv[13])
+    elif sys.argv[12] == 'load-main':
+        LocaleDB(*sys.argv[1:12]).get_main().load_locales()
+    elif sys.argv[12] == 'load-pop-state':
+        req_argn(13)
+        LocaleDB(*sys.argv[1:12]).get_pop().load_state(sys.argv[13])
+    elif sys.argv[12] == 'load-vax':
         req_argn(12)
-        LocaleDB(*sys.argv[1:11]).get_dis().load_disease(sys.argv[12])
-    elif sys.argv[11] == 'load-main':
-        LocaleDB(*sys.argv[1:11]).get_main().load_locales()
-    elif sys.argv[11] == 'load-pop-state':
-        req_argn(12)
-        LocaleDB(*sys.argv[1:11]).get_pop().load_state(sys.argv[12])
+        LocaleDB(*sys.argv[1:12]).get_vax().load_vax()        
     else:
-        print(f'Unknown command: {sys.argv[11]}')
+        print(f'Unknown command: {sys.argv[12]}')
         sys.exit(1)

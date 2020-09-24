@@ -1,0 +1,35 @@
+SET client_min_messages TO WARNING;
+BEGIN;
+
+DROP SCHEMA IF EXISTS $PG_SCHEMA_VAX CASCADE;
+CREATE SCHEMA $PG_SCHEMA_VAX;
+
+CREATE TABLE $PG_SCHEMA_VAX.age (
+id   integer PRIMARY KEY,
+name varchar(28) NOT NULL
+);
+
+CREATE TABLE $PG_SCHEMA_VAX.race (
+id   integer PRIMARY KEY,
+name varchar(37) NOT NULL
+);
+
+CREATE TABLE $PG_SCHEMA_VAX.vax (  -- hypertables cannot be unlogged
+locale         VARCHAR(20) NOT NULL, 
+coverage       VARCHAR(4) NOT NULL, -- did not convert to DECIMAL due to NR values
+ll             DECIMAL(3, 1), 
+ul             DECIMAL(3, 1), 
+ci             varchar(10),    
+sample         VARCHAR(10),
+target         DECIMAL(3, 1),
+age_id         integer REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
+race_id        integer REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
+start_year     integer NOT NULL,
+end_year       integer NOT NULL
+);
+
+/* The below commented out statement may not make sense given that start_year is an integer */
+/* TODO: verify how this should be handled */
+/* SELECT create_hypertable('$PG_SCHEMA_NPI.vax', 'start_year'); */
+
+COMMIT;

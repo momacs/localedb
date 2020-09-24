@@ -8,6 +8,10 @@ RUN apt-get update \
 
 RUN pip install --no-cache-dir psycopg2-binary
 
+COPY docker-requirements.txt /tmp/docker-requirements.txt
+
+RUN pip install -r /tmp/docker-requirements.txt
+
 COPY localedb /usr/local/bin/localedb
 
 RUN mkdir -p /usr/share/localedb
@@ -19,4 +23,3 @@ VOLUME /usr/share/localedb/schemas /usr/share/localedb/scripts /usr/share/locale
 WORKDIR /usr/share/localedb
 
 ENTRYPOINT ["localedb"]
-
