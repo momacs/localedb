@@ -11,28 +11,11 @@
 #
 # Contributors
 #     Tomek D Loboda; 2020.06.08 - present
-#         The original idea, design, and implementation
-#
-# ----------------------------------------------------------------------------------------------------------------------
-#
-# Dependencies (development environment)
-#     curl or wget
-#     docker
-#
-# Dependencies (production environment)
-#     curl or wget
-#     PostgreSQL client
-#     PostgreSQL server (with PostGIS and TimescaleDB extensions)
-#     Python 3
-#
-# ----------------------------------------------------------------------------------------------------------------------
-#
-# TODO
-#     Figure out how to conditionally run setup.py on Linux
-#         pip install psycopg2-binary
-#     Implement fs_download_unzip() below
-#     Compose a Docker container with shp2pgsql and Python already inside
-#     Move functionality into the Docker container
+#         The original idea, design, and implementation; data import
+#     Scott Haleen; 2020.09.24 - present
+#         Design; docker mastery
+#     Brandon Rose; 2020.09.24 - present
+#         Design; data import
 #
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -42,6 +25,7 @@ declare -r is_verbose=1
 
 declare -r pg_host=db
 declare -r pg_port=5432
+declare -r pg_port_ext=5433
 declare -r pg_schema_main=main
 declare -r pg_schema_dis=dis
 declare -r pg_schema_geo=geo
@@ -59,28 +43,22 @@ declare -r dir_dl_pop=$dir_root/data/dl/pop
 declare -r dir_rt=$dir_root/data/rt
 declare -r dir_script=$dir_root
 declare -r dir_pg_data=$dir_root/pg
-declare -r dir_schemas=/usr/share/localedb/schemas
+declare -r dir_schemas=$dir_root/schemas
 
 declare -r self_name=$(basename $0)
 declare -r self_path=$(dirname $0)
 declare -r cmd=$1
 declare -r usage="Usage: $self_name $cmd"
 
-
-[ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-
 declare -r cmd_dl="wget -q"
-
 declare -r cmd_dropdb="dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db"
 declare -r cmd_createdb="createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
 declare -r cmd_pg_isready="pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
 declare -r cmd_psql="psql $pg_conn_str -q"
-declare -r cmd_psql_it="psql $pg_conn_str -q"
 declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $dir_rt"
 declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
+
+[ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -99,20 +77,9 @@ declare -a url_geo_bl=("https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/201
 declare -a url_pop=("https://gitlab.com/momacs/dataset-pop-us-2010-midas/-/raw/master/zip/" ".zip")
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University
-# https://github.com/CSSEGISandData/COVID-19
-
 declare -r sql_schema_dis="$(PG_SCHEMA_DIS=${pg_schema_dis} PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_dis}.schema)"
-
-# ----------------------------------------------------------------------------------------------------------------------
 declare -r sql_schema_geo="$(PG_SCHEMA_GEO=${pg_schema_geo} envsubst < ${dir_schemas}/${pg_schema_geo}.schema)"
-
-# ----------------------------------------------------------------------------------------------------------------------
 declare -r sql_schema_main="$(PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_main}.schema)"
-
-# ----------------------------------------------------------------------------------------------------------------------
-# The schema of the original synthetic population data has been updated (see comments below)
 declare -r sql_schema_pop="$(PG_SCHEMA_POP=${pg_schema_pop} envsubst < ${dir_schemas}/${pg_schema_pop}.schema)"
 
 
@@ -582,17 +549,16 @@ case "$cmd" in
             "db")
                 echo "PostgreSQL server"
                 echo "    Hostname  $pg_host"
-                echo "    Port      $pg_port"
+                echo "    Port      $pg_port_ext"
                 echo "    Database  $pg_db"
                 echo "    Username  $pg_usr"
                 echo "    Password  $pg_pwd"
-                echo "    Conn str  $pg_conn_str"
+                echo "    Conn str  postgresql://${pg_usr}:${pg_pwd}@${pg_host}:${pg_port_ext}/${pg_db}"
                 ;;
             "fs")
                 echo "Directory structure"
-                echo "    Root               $dir_root         $(du -sh $dir_root | awk 'END {print $1}')"
+                echo "    Root               $dir_root              $(du -sh $dir_root | awk 'END {print $1}')"
                 echo "    Runtime            $dir_rt      $(du -sh $dir_rt | awk 'END {print $1}')"
-                #echo "    PostgreSQL data    $dir_pg_data      $(du -sh $dir_pg_data | awk 'END {print $1}')"
                 echo "    Disease data       $dir_dl_dis  $(du -sh $dir_dl_dis | awk 'END {print $1}')"
                 echo "    Geographic data    $dir_dl_geo  $(du -sh $dir_dl_geo | awk 'END {print $1}')"
                 echo "    Population data    $dir_dl_pop  $(du -sh $dir_dl_pop | awk 'END {print $1}')"
@@ -600,14 +566,13 @@ case "$cmd" in
             *) echo "$usage $2{all data db fs}" && exit 1;;
         esac;;
     "setup")
-        # Filesystem:
         mkdir -p $dir_root
         mkdir -p $dir_dl_dis
         mkdir -p $dir_dl_geo
         mkdir -p $dir_dl_pop
         mkdir -p $dir_rt
         mkdir -p $dir_script
-        #mkdir -p $dir_pg_data
+        
         db_init 1
         ;;
     *) echo "Commands: db fs help info load setup";;
