@@ -1,0 +1,114 @@
+SET client_min_messages TO WARNING;
+BEGIN;
+
+DROP SCHEMA IF EXISTS $PG_SCHEMA_GEO CASCADE;
+CREATE SCHEMA $PG_SCHEMA_GEO;
+
+CREATE SEQUENCE IF NOT EXISTS $PG_SCHEMA_GEO.st_gid_seq;
+CREATE SEQUENCE IF NOT EXISTS $PG_SCHEMA_GEO.co_gid_seq;
+CREATE SEQUENCE IF NOT EXISTS $PG_SCHEMA_GEO.tr_gid_seq;
+CREATE SEQUENCE IF NOT EXISTS $PG_SCHEMA_GEO.bg_gid_seq;
+CREATE SEQUENCE IF NOT EXISTS $PG_SCHEMA_GEO.bl_gid_seq;
+
+CREATE UNLOGGED TABLE $PG_SCHEMA_GEO.st (
+gid        int4 PRIMARY KEY DEFAULT nextval('geo.st_gid_seq'::regclass),
+region10   varchar(2),
+division10 varchar(2),
+statefp10  varchar(2),
+statens10  varchar(8),
+geoid10    varchar(2),
+stusps10   varchar(2),
+name10     varchar(100),
+lsad10     varchar(2),
+mtfcc10    varchar(5),
+funcstat10 varchar(1),
+aland10    numeric(14,0),  --float8,
+awater10   numeric(14,0),  --float8,
+intptlat10 varchar(11),
+intptlon10 varchar(12),
+geom       geometry
+);
+
+CREATE UNLOGGED TABLE $PG_SCHEMA_GEO.co (
+gid        int4 PRIMARY KEY DEFAULT nextval('geo.co_gid_seq'::regclass),
+statefp10  varchar(2),
+countyfp10 varchar(3),
+countyns10 varchar(8),
+geoid10    varchar(5),
+name10     varchar(100),
+namelsad10 varchar(100),
+lsad10     varchar(2),
+classfp10  varchar(2),
+mtfcc10    varchar(5),
+csafp10    varchar(3),
+cbsafp10   varchar(5),
+metdivfp10 varchar(5),
+funcstat10 varchar(1),
+aland10    numeric(14,0),  --float8,
+awater10   numeric(14,0),  --float8,
+intptlat10 varchar(11),
+intptlon10 varchar(12),
+geom       geometry
+);
+
+CREATE UNLOGGED TABLE $PG_SCHEMA_GEO.tr (
+gid        int4 PRIMARY KEY DEFAULT nextval('geo.tr_gid_seq'::regclass),
+statefp10  varchar(2),
+countyfp10 varchar(3),
+tractce10  varchar(6),
+geoid10    varchar(11),
+name10     varchar(7),
+namelsad10 varchar(20),
+mtfcc10    varchar(5),
+funcstat10 varchar(1),
+aland10    numeric(14,0),  --float8,
+awater10   numeric(14,0),  --float8,
+intptlat10 varchar(11),
+intptlon10 varchar(12),
+geom       geometry
+);
+
+CREATE UNLOGGED TABLE $PG_SCHEMA_GEO.bg (
+gid        int4 PRIMARY KEY DEFAULT nextval('geo.bg_gid_seq'::regclass),
+statefp10  varchar(2),
+countyfp10 varchar(3),
+tractce10  varchar(6),
+blkgrpce10 varchar(1),
+geoid10    varchar(12),
+namelsad10 varchar(13),
+mtfcc10    varchar(5),
+funcstat10 varchar(1),
+aland10    numeric(14,0),  --float8,
+awater10   numeric(14,0),  --float8,
+intptlat10 varchar(11),
+intptlon10 varchar(12),
+geom       geometry
+);
+
+CREATE UNLOGGED TABLE $PG_SCHEMA_GEO.bl (
+gid        int4 PRIMARY KEY DEFAULT nextval('geo.bl_gid_seq'::regclass),
+statefp10  varchar(2),
+countyfp10 varchar(3),
+tractce10  varchar(6),
+blockce10  varchar(4),
+geoid10    varchar(15),
+name10     varchar(10),
+mtfcc10    varchar(5),
+ur10       varchar(1),
+uace10     varchar(5),
+uatyp10    varchar(1),
+funcstat10 varchar(1),
+aland10    numeric(14,0),  --float8,
+awater10   numeric(14,0),  --float8,
+intptlat10 varchar(11),
+intptlon10 varchar(12),
+geom       geometry
+);
+
+CREATE INDEX st__geom_idx ON $PG_SCHEMA_GEO.st USING GIST(geom);
+CREATE INDEX co__geom_idx ON $PG_SCHEMA_GEO.co USING GIST(geom);
+CREATE INDEX tr__geom_idx ON $PG_SCHEMA_GEO.tr USING GIST(geom);
+CREATE INDEX bg__geom_idx ON $PG_SCHEMA_GEO.bg USING GIST(geom);
+CREATE INDEX bl__geom_idx ON $PG_SCHEMA_GEO.bl USING GIST(geom);
+
+COMMIT;

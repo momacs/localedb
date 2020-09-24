@@ -1,0 +1,47 @@
+version: "3.8"
+services:
+
+  db:
+    image: timescale/timescaledb-postgis:latest-pg12
+    container_name: pg12
+    env_file:
+      - .dockerenv
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+
+  localedb:
+    image: localedb:0.0.1
+    container_name: localedb
+    env_file:
+      - .dockerenv
+    tty: true
+    volumes:
+      - localedb_data:/usr/share/localedb/data
+      - schema_files:/usr/share/localedb/schemas
+      - ${PWD}/localedb_man.py:/usr/share/localedb/localedb_man.py
+      - ${PWD}/localedb:/usr/local/bin/localedb
+
+volumes:
+  pgdata:
+    driver: local
+    driver_opts:
+      type: volume
+      device: ${PWD}/.localedb/pg
+      o: bind
+  localedb_data:
+    driver: local
+    driver_opts:
+      type: volume
+      device: ${PWD}/.localedb/data
+      o: bind
+  schema_files:
+    driver: local
+    driver_opts:
+      type: volume
+      device: ${PWD}/schemas
+      o: bind
+

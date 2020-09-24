@@ -437,3 +437,4 @@ if __name__ == '__main__':
         LocaleDB(*sys.argv[1:11]).get_pop().load_state(sys.argv[12])
     else:
         print(f'Unknown command: {sys.argv[11]}')
+        sys.exit(1)
