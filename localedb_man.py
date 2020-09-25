@@ -464,6 +464,12 @@ class VaxSchema(Schema):
         row['is_high_risk'] = match['is_high_risk']    
         return row            
 
+    def get_locales(self, df):
+        locale_df = pd.read_sql("SELECT id, admin1 FROM main.locale WHERE admin0='US' AND admin2 IS NULL;", self.engine)
+        df = df.join(locale_df.set_index('admin1'), how='inner', on='locale')
+        df = df.rename(columns = {'locale': 'locale_name', 'id': 'locale_id'})
+        return df
+
     def process_vax_file(self):
         """
         Major preprocessing of vaccination data from CDC. 
@@ -570,6 +576,10 @@ class VaxSchema(Schema):
 
         # update age table with quantitative lookups
         age_cats_df = age_cats_df.apply(lambda x: self.age_parser(x), axis=1)
+
+
+        # map locales to main schema
+        out_df = self.get_locales(out_df)
 
         return out_df, age_cats_df, race_cats_df
 
