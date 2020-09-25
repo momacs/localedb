@@ -5,27 +5,30 @@ DROP SCHEMA IF EXISTS $PG_SCHEMA_VAX CASCADE;
 CREATE SCHEMA $PG_SCHEMA_VAX;
 
 CREATE TABLE $PG_SCHEMA_VAX.age (
-id   integer PRIMARY KEY,
-name varchar(28) NOT NULL
+id            INTEGER PRIMARY KEY,
+name          VARCHAR(28) NOT NULL,
+age_0         DECIMAL(3, 1) NOT NULL, 
+age_1         DECIMAL(3, 1), 
+is_high_risk  BOOLEAN NOT NULL
 );
 
 CREATE TABLE $PG_SCHEMA_VAX.race (
-id   integer PRIMARY KEY,
-name varchar(37) NOT NULL
+id   INTEGER PRIMARY KEY,
+name VARCHAR(37) NOT NULL
 );
 
 CREATE TABLE $PG_SCHEMA_VAX.vax (  -- hypertables cannot be unlogged
 locale         VARCHAR(20) NOT NULL, 
-coverage       VARCHAR(4) NOT NULL, -- did not convert to DECIMAL due to NR values
+coverage       DECIMAL(3, 1),
 ll             DECIMAL(3, 1), 
 ul             DECIMAL(3, 1), 
-ci             varchar(10),    
-sample         VARCHAR(10),
+ci             DECIMAL(3, 1), 
+sample         INTEGER,
 target         DECIMAL(3, 1),
-age_id         integer REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
-race_id        integer REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
-start_year     integer NOT NULL,
-end_year       integer NOT NULL
+age_id         INTEGER REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
+race_id        INTEGER REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
+start_year     INTEGER NOT NULL,
+end_year       INTEGER NOT NULL
 );
 
 /* The below commented out statement may not make sense given that start_year is an integer */

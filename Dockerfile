@@ -6,8 +6,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends postgis \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir psycopg2-binary
-
 COPY docker-requirements.txt /tmp/docker-requirements.txt
 
 RUN pip install -r /tmp/docker-requirements.txt

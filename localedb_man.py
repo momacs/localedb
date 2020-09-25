@@ -433,6 +433,37 @@ class VaxSchema(Schema):
             proc_dfs = proc_dfs.append(df_)
         return proc_dfs  
 
+    def parse_CI(self, CI):
+        """
+        Parses confidence interval into a float
+        """
+        if not pd.isna(CI):
+            return float(CI.split('±')[1].split(')')[0])
+        else:
+            return CI
+
+    def age_parser(self, row):
+        age_lookup = {'13-17 years': {'age_0': 13, 'age_1': 17, 'is_high_risk': False},
+                     '18-49 years': {'age_0': 18, 'age_1': 49, 'is_high_risk': False},
+                     '18-49 years at high risk': {'age_0': 18, 'age_1': 49, 'is_high_risk': True},
+                     '18-49 years not at high risk': {'age_0': 18, 'age_1': 49, 'is_high_risk': False},
+                     '18-64 years': {'age_0': 18, 'age_1': 64, 'is_high_risk': False},
+                     '18-64 years at high risk': {'age_0': 18, 'age_1': 64, 'is_high_risk': True},
+                     '18-64 years not at high risk': {'age_0': 18, 'age_1': 64, 'is_high_risk': False},
+                     '5-12 years': {'age_0': 5, 'age_1': 12, 'is_high_risk': False},
+                     '50-64 years': {'age_0': 50, 'age_1': 64, 'is_high_risk': False},
+                     '6 months - 17 years': {'age_0': 0.5, 'age_1': 17, 'is_high_risk': False},
+                     '6 months - 4 years': {'age_0': 0.5, 'age_1': 4, 'is_high_risk': False},
+                     '≥18 years': {'age_0': 18, 'age_1': np.nan, 'is_high_risk': False},
+                     '≥6 months': {'age_0': 0.5, 'age_1': np.nan, 'is_high_risk': False},
+                     '≥65 years': {'age_0': 65, 'age_1': np.nan, 'is_high_risk': False}
+                     }                    
+        match = age_lookup[row['name']]
+        row['age_0'] = match['age_0']
+        row['age_1'] = match['age_1']
+        row['is_high_risk'] = match['is_high_risk']    
+        return row            
+
     def process_vax_file(self):
         """
         Major preprocessing of vaccination data from CDC. 
@@ -530,6 +561,16 @@ class VaxSchema(Schema):
         out_df.columns= out_df.columns.str.lower()
         age_cats_df.columns= age_cats_df.columns.str.lower()
         race_cats_df.columns= race_cats_df.columns.str.lower()
+
+        # replace NR values with null
+        out_df = out_df.replace(to_replace='.*NR.*', value=np.nan, regex=True)
+
+        # parse CI field
+        out_df['ci'] = out_df.ci.apply(lambda x: self.parse_CI(x))
+
+        # update age table with quantitative lookups
+        age_cats_df = age_cats_df.apply(lambda x: self.age_parser(x), axis=1)
+
         return out_df, age_cats_df, race_cats_df
 
     def load_vax(self):
