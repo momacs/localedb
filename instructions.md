@@ -25,6 +25,9 @@ docker-compose run --rm localedb load pop AK
 ## Load vaccination data
 docker-compose run --rm localedb load vax
 
+## Test vaccination data ingest
+docker-compose run --rm localedb test vax
+
 ## Display Info
 docker-compose run --rm localedb info all
 ```

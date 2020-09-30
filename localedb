@@ -601,6 +601,12 @@ case "$cmd" in
         
         db_init 1
         ;;
+    "test")
+        case "$2" in
+            "vax")
+                $cmd_py test-vax
+                ;;                 
+        esac;;        
     *) echo "Commands: db fs help info load setup";;
 esac
 
