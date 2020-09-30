@@ -19,12 +19,12 @@ name VARCHAR(37) NOT NULL
 
 CREATE TABLE $PG_SCHEMA_VAX.vax (  -- hypertables cannot be unlogged
 locale_id      INTEGER NOT NULL, 
-coverage       DECIMAL(3, 1),
-ll             DECIMAL(3, 1), 
-ul             DECIMAL(3, 1), 
-ci             DECIMAL(3, 1), 
+coverage       DECIMAL,
+ll             DECIMAL, 
+ul             DECIMAL, 
+ci             DECIMAL, 
 sample         INTEGER,
-target         DECIMAL(3, 1),
+target         DECIMAL,
 age_id         INTEGER REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
 race_id        INTEGER REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
 start_year     INTEGER NOT NULL,
