@@ -18,7 +18,6 @@ name VARCHAR(37) NOT NULL
 );
 
 CREATE TABLE $PG_SCHEMA_VAX.vax (  -- hypertables cannot be unlogged
-locale_name    VARCHAR(20) NOT NULL, 
 locale_id      INTEGER NOT NULL, 
 coverage       DECIMAL(3, 1),
 ll             DECIMAL(3, 1), 

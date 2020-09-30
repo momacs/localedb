@@ -467,7 +467,8 @@ class VaxSchema(Schema):
     def get_locales(self, df):
         locale_df = pd.read_sql("SELECT id, admin1 FROM main.locale WHERE admin0='US' AND admin2 IS NULL;", self.engine)
         df = df.join(locale_df.set_index('admin1'), how='inner', on='locale')
-        df = df.rename(columns = {'locale': 'locale_name', 'id': 'locale_id'})
+        df = df.rename(columns = {'id': 'locale_id'})
+        del(df['locale'])
         return df
 
     def process_vax_file(self):
