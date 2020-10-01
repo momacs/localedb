@@ -5,6 +5,7 @@ import csv
 import io
 import math
 import os
+import re
 import psycopg2
 import psycopg2.extras
 import re
@@ -601,9 +602,46 @@ class VaxSchema(Schema):
 
 
     def test(self):
-        with self.conn.dbi.cursor() as c:
-            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_vax}.vax;')
-            print(c.fetchone().n)
+        with self.dbi.conn.cursor() as c:
+            '''
+            SELECT CI FROM vax LEFT JOIN age ON age.id = vax.age_id WHERE name = '≥6 months' AND start_year = 2010 AND locale_name='Louisiana';
+            ==2.1
+            '''
+            queries = [
+                        (
+                            f"SELECT ci FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.age ON age.id = vax.age_id\
+                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
+                              WHERE name = '≥6 months' AND start_year = 2010 AND admin1='Louisiana';",
+                            2.1
+                        ),
+                        (
+                            f"SELECT sample FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.age ON age.id = vax.age_id\
+                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
+                              WHERE name = '18-64 years at high risk' AND start_year = 2016 AND admin1='Oregon';",
+                            708.0
+                        ),
+                        (
+                            f"SELECT coverage FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.age ON age.id = vax.age_id\
+                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
+                              WHERE name = '18-49 years at high risk' AND start_year = 2014 AND admin1='Wyoming'",
+                            33.8
+                        ),  
+                        (
+                            f"SELECT coverage FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.race ON race.id = vax.race_id\
+                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
+                              WHERE name = 'Hispanic' AND start_year = 2014 AND admin1='California';",
+                            40.7
+                        ),                                                                        
+                      ]
+
+            for q in queries:
+                c.execute(q[0])
+                result = float(c.fetchone()[0])
+                try:
+                    assert result == q[1]
+                    print(f'SUCCESS: {result} (query result) equals {q[1]} (expected result).')
+                except:
+                    print(f"##########\nTEST FAILURE: \n{result} (query result) does not equal {q[1]} (expected result) for query:\n{re.sub(' +', ' ',q[0])}\n##########\n")
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -647,6 +685,9 @@ if __name__ == '__main__':
     elif sys.argv[12] == 'load-vax':
         req_argn(12)
         LocaleDB(*sys.argv[1:12]).get_vax().load_vax()        
+    elif sys.argv[12] == 'test-vax':
+        req_argn(12)
+        LocaleDB(*sys.argv[1:12]).get_vax().test()        
     else:
         print(f'Unknown command: {sys.argv[12]}')
         sys.exit(1)
