@@ -6,29 +6,29 @@ CREATE SCHEMA $PG_SCHEMA_VAX;
 
 CREATE TABLE $PG_SCHEMA_VAX.age (
 id            INTEGER PRIMARY KEY,
-name          VARCHAR(28) NOT NULL,
-age_0         DECIMAL(3, 1) NOT NULL, 
-age_1         DECIMAL(3, 1), 
+name          TEXT NOT NULL,
+age_0         DECIMAL(3,1) NOT NULL,
+age_1         DECIMAL(3,1),
 is_high_risk  BOOLEAN NOT NULL
 );
 
 CREATE TABLE $PG_SCHEMA_VAX.race (
 id   INTEGER PRIMARY KEY,
-name VARCHAR(37) NOT NULL
+name TEXT NOT NULL
 );
 
-CREATE TABLE $PG_SCHEMA_VAX.vax (  -- hypertables cannot be unlogged
-locale_id      INTEGER NOT NULL, 
-coverage       DECIMAL,
-ll             DECIMAL, 
-ul             DECIMAL, 
-ci             DECIMAL, 
-sample         INTEGER,
-target         DECIMAL,
-age_id         INTEGER REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
-race_id        INTEGER REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
-start_year     INTEGER NOT NULL,
-end_year       INTEGER NOT NULL
+CREATE TABLE $PG_SCHEMA_VAX.vax (
+locale_id   INTEGER NOT NULL,
+coverage    DECIMAL,
+ll          DECIMAL,
+ul          DECIMAL,
+ci          DECIMAL,
+sample      INTEGER,
+target      DECIMAL,
+age_id      INTEGER REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
+race_id     INTEGER REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
+start_year  INTEGER NOT NULL,
+end_year    INTEGER NOT NULL
 );
 
 /* The below commented out statement may not make sense given that start_year is an integer */

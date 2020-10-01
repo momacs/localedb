@@ -4,19 +4,19 @@ BEGIN;
 DROP SCHEMA IF EXISTS $pg_schema_main CASCADE;
 CREATE SCHEMA $PG_SCHEMA_MAIN;
 
-CREATE TABLE $PG_SCHEMA_MAIN.locale (  -- tables referenced from hypertables cannot be unlogged
-id        integer PRIMARY KEY,
-iso2      char(2),           -- ISO 3166-1 alpha-2 country code
-iso3      char(3),           -- ISO 3166-1 alpha-3 country code
-iso_num   integer,           -- ISO 3166-1 numeric country code
-fips      text,              -- NULL for non-US locales (i.e., not a FIPS country code)
-admin0    text NOT NULL,     -- country
-admin1    text,              -- principal administrative subdivision (e.g., province or state)
-admin2    text,              -- further administrative subdivision (e.g., US county)
-lat       double precision,  -- wgs84
-long      double precision,  -- ^
-coords    geometry,
-pop       integer,
+CREATE TABLE $PG_SCHEMA_MAIN.locale (  -- referenced from hypertable
+id        INTEGER PRIMARY KEY,
+iso2      CHAR(2),           -- ISO 3166-1 alpha-2 country code
+iso3      CHAR(3),           -- ISO 3166-1 alpha-3 country code
+iso_num   INTEGER,           -- ISO 3166-1 numeric country code
+fips      TEXT,              -- NULL for non-US locales (i.e., not a FIPS country code)
+admin0    TEXT NOT NULL,     -- country
+admin1    TEXT,              -- principal administrative subdivision (e.g., province or state)
+admin2    TEXT,              -- further administrative subdivision (e.g., US county)
+lat       DOUBLE PRECISION,  -- wgs84
+long      DOUBLE PRECISION,  -- ^
+coords    GEOMETRY,
+pop       INTEGER,
 UNIQUE (iso2, iso3, iso_num, admin0, admin1, admin2)
 );
 

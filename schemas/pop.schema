@@ -4,72 +4,72 @@ BEGIN;
 DROP SCHEMA IF EXISTS $PG_SCHEMA_POP CASCADE;
 CREATE SCHEMA $PG_SCHEMA_POP;
 
-CREATE UNLOGGED TABLE $PG_SCHEMA_POP.school (  -- tbl renamed from: schools
-id      integer PRIMARY KEY,          -- col renamed from: sp_id
-st_fips varchar(2),                   -- col added
-stco    text NOT NULL,
-lat     double precision NOT NULL,    -- col renamed from: latitude
-long    double precision NOT NULL,    -- col renamed from: longitude
-coords  geometry                      -- col added
+CREATE UNLOGGED TABLE $PG_SCHEMA_POP.school (
+id      INTEGER PRIMARY KEY,  -- sp_id
+st_fips CHAR(2),
+stco    TEXT NOT NULL,
+lat     DOUBLE PRECISION NOT NULL,
+long    DOUBLE PRECISION NOT NULL,
+coords  GEOMETRY
 );
 
-CREATE UNLOGGED TABLE $PG_SCHEMA_POP.hospital (    -- tbl renamed from: hospitals
-id            integer PRIMARY KEY,        -- col renamed from: hosp_id
-st_fips       varchar(2),                 -- col added
-worker_cnt    smallint NOT NULL,
-physician_cnt smallint NOT NULL,
-bed_cnt       smallint NOT NULL,
-lat           double precision NOT NULL,  -- col renamed from: latitude
-long          double precision NOT NULL,  -- col renamed from: longitude
-coords        geometry                    -- col added
+CREATE UNLOGGED TABLE $PG_SCHEMA_POP.hospital (
+id            INTEGER PRIMARY KEY,  -- hosp_id
+st_fips       varchar(2),
+worker_cnt    SMALLINT NOT NULL,
+physician_cnt SMALLINT NOT NULL,
+bed_cnt       SMALLINT NOT NULL,
+lat           DOUBLE PRECISION NOT NULL,
+long          DOUBLE PRECISION NOT NULL,
+coords        GEOMETRY
 );
 
-CREATE UNLOGGED TABLE $PG_SCHEMA_POP.household (  -- tbl renamed from: households
-id       integer PRIMARY KEY,            -- col renamed from: hh_id
-st_fips  varchar(2),                     -- col added
-stcotrbg text NOT NULL,
-race_id  smallint NOT NULL,              -- col renamed from: hh_race
-income   integer NOT NULL,               -- col renamed from: hh_income
-lat      double precision NOT NULL,      -- col renamed from: latitude
-long     double precision NOT NULL,      -- col renamed from: longitude
-coords   geometry                        -- col added
+CREATE UNLOGGED TABLE $PG_SCHEMA_POP.household (
+id       INTEGER PRIMARY KEY,  -- hh_id
+st_fips  CHAR(2),
+stcotrbg TEXT NOT NULL,
+race_id  SMALLINT NOT NULL,
+income   INTEGER NOT NULL,
+lat      DOUBLE PRECISION NOT NULL,
+long     DOUBLE PRECISION NOT NULL,
+coords   GEOMETRY
 );
 
 CREATE UNLOGGED TABLE $PG_SCHEMA_POP.gq (
-id         integer PRIMARY KEY,        -- col renamed from: sp_id
-st_fips    varchar(2),                 -- col added
-type       text NOT NULL,              -- col renamed from: gq_type
-stcotrbg   text NOT NULL,
-person_cnt smallint NOT NULL,
-lat        double precision NOT NULL,  -- col renamed from: latitude
-long       double precision NOT NULL,  -- col renamed from: longitude
-coords     geometry                    -- col added
+id         INTEGER PRIMARY KEY,  -- sp_id
+st_fips    varchar(2),
+type       TEXT NOT NULL,
+stcotrbg   TEXT NOT NULL,
+person_cnt SMALLINT NOT NULL,
+lat        DOUBLE PRECISION NOT NULL,
+long       DOUBLE PRECISION NOT NULL,
+coords     geometry
 );
 
-CREATE UNLOGGED TABLE $PG_SCHEMA_POP.workplace (  -- tbl renamed from: workplaces
-id      integer PRIMARY KEY,             -- col renamed from: sp_id
-st_fips varchar(2),                      -- col added
-lat     double precision NOT NULL,       -- col renamed from: latitude
-long    double precision NOT NULL,       -- col renamed from: longitude
-coords  geometry                         -- col added
+CREATE UNLOGGED TABLE $PG_SCHEMA_POP.workplace (
+id      INTEGER PRIMARY KEY,  -- sp_id
+st_fips CHAR(2),
+lat     DOUBLE PRECISION NOT NULL,
+long    DOUBLE PRECISION NOT NULL,
+coords  GEOMETRY
 );
 
-CREATE UNLOGGED TABLE $PG_SCHEMA_POP.person (                                                                         -- tbl renamed from: people
-id           integer PRIMARY KEY,                                                                            -- col renamed from: sp_id
-household_id integer NOT NULL REFERENCES $PG_SCHEMA_POP.household (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- col renamed from: sp_hh_id
-age          smallint NOT NULL,
-sex          char(1) NOT NULL,
-race_id      smallint NOT NULL,                                                                        -- col renamed from: race
-relate_id    smallint NOT NULL,                                                                        -- col renamed from: relate
-school_id    integer REFERENCES $PG_SCHEMA_POP.school    (id) ON DELETE CASCADE ON UPDATE CASCADE,
-workplace_id integer REFERENCES $PG_SCHEMA_POP.workplace (id) ON DELETE CASCADE ON UPDATE CASCADE
+CREATE UNLOGGED TABLE $PG_SCHEMA_POP.person (
+id           INTEGER PRIMARY KEY,                                                                            -- sp_id
+household_id INTEGER NOT NULL REFERENCES $PG_SCHEMA_POP.household (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- sp_hh_id
+age          SMALLINT NOT NULL,
+sex          CHAR(1) NOT NULL,
+race_id      SMALLINT NOT NULL,
+relate_id    SMALLINT NOT NULL,
+school_id    INTEGER REFERENCES $PG_SCHEMA_POP.school    (id) ON DELETE CASCADE ON UPDATE CASCADE,
+workplace_id INTEGER REFERENCES $PG_SCHEMA_POP.workplace (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE UNLOGGED TABLE $PG_SCHEMA_POP.gq_person (                                                         -- tbl renamed from: gq_people
-id     integer NOT NULL PRIMARY KEY,                                                            -- col renamed from: sp_id
-gq_id  integer NOT NULL REFERENCES $PG_SCHEMA_POP.gq (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- col renamed from: sp_gq_id
-age    smallint NOT NULL,
-sex    char(1) NOT NULL
+CREATE UNLOGGED TABLE $PG_SCHEMA_POP.gq_person (
+id     INTEGER NOT NULL PRIMARY KEY,                                                            -- sp_id
+gq_id  INTEGER NOT NULL REFERENCES $PG_SCHEMA_POP.gq (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- sp_gq_id
+age    SMALLINT NOT NULL,
+sex    CHAR(1) NOT NULL
 );
 
 CREATE INDEX person__household_id__fk_idx ON $PG_SCHEMA_POP.person    (household_id);
