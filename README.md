@@ -16,16 +16,16 @@ This design that separates data management and data consumption reflects the ant
 
 As depicted on the figure above, the current projection is for LocaleDB to contain the following data types:
 
-- **Disease dynamics** ​(e.g., number of confirmed cases)
-- **Clinical** ​(e.g., R0, incubation period, proportion of asymptomatic cases, etc.)
-- ​**Non-pharmaceutical interventions** ​(**NPIs**; e.g., dates of stay-at-home order)
+- **Disease dynamics** (e.g., number of confirmed cases)
+- **Clinical** (e.g., R0, incubation period, proportion of asymptomatic cases, etc.)
+- **Non-pharmaceutical interventions** (**NPIs**; e.g., dates of stay-at-home order)
 - **Medical countermeasures** (**MCMs**; e.g., vaccine availability, efficacy, and allocation strategies)
-- **Population** ​(e.g., households, their incomes, age of people, etc.)
+- **Population** (e.g., households, their incomes, age of people, etc.)
 - **Geographic and cartographic** (e.g., area of land, population density)
-​- ​**Mobility** ​(mobile-phone based)
-- ​**Health factors and outcomes** ​(e.g., diet, exercise, access to care, etc.)
-- ​**Local events** ​(e.g., dates and sizes of mass protests)
-- ​**Meteorological**
+-​**Mobility** (mobile-phone based)
+- **Health factors and outcomes** (e.g., diet, exercise, access to care, etc.)
+- **Local events** (e.g., dates and sizes of mass protests)
+- **Meteorological**
 
 All that data will be stratified by locale at all available levels of spatial aggregation (e.g., country, state, county, tract, block group, block).  In terms of temporal resolution, the highest frequency with which processes are sampled/measured will be the goal.  For example, disease dynamics will be represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes will be encoded with far fewer time steps (probably months).
 
