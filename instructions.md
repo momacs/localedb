@@ -22,6 +22,9 @@ docker-compose run --rm localedb load geo AK
 ## Load population data
 docker-compose run --rm localedb load pop AK
 
+## Load vaccination data
+docker-compose run --rm localedb load vax
+
 ## Display Info
 docker-compose run --rm localedb info all
 ```

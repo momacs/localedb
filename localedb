@@ -30,6 +30,7 @@ declare -r pg_schema_main=main
 declare -r pg_schema_dis=dis
 declare -r pg_schema_geo=geo
 declare -r pg_schema_pop=pop
+declare -r pg_schema_vax=vax
 declare -r pg_db=localedb
 declare -r pg_usr=postgres
 declare -r pg_pwd=sa
@@ -40,6 +41,7 @@ declare -r dir_root=/usr/share/localedb
 declare -r dir_dl_dis=$dir_root/data/dl/dis
 declare -r dir_dl_geo=$dir_root/data/dl/geo
 declare -r dir_dl_pop=$dir_root/data/dl/pop
+declare -r dir_dl_vax=$dir_root/data/dl/vax
 declare -r dir_rt=$dir_root/data/rt
 declare -r dir_script=$dir_root
 declare -r dir_pg_data=$dir_root/pg
@@ -55,7 +57,7 @@ declare -r cmd_dropdb="dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg
 declare -r cmd_createdb="createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
 declare -r cmd_pg_isready="pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
 declare -r cmd_psql="psql $pg_conn_str -q"
-declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $dir_rt"
+declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $dir_rt"
 declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
 
 [ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
@@ -81,6 +83,7 @@ declare -r sql_schema_dis="$(PG_SCHEMA_DIS=${pg_schema_dis} PG_SCHEMA_MAIN=${pg_
 declare -r sql_schema_geo="$(PG_SCHEMA_GEO=${pg_schema_geo} envsubst < ${dir_schemas}/${pg_schema_geo}.schema)"
 declare -r sql_schema_main="$(PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_main}.schema)"
 declare -r sql_schema_pop="$(PG_SCHEMA_POP=${pg_schema_pop} envsubst < ${dir_schemas}/${pg_schema_pop}.schema)"
+declare -r sql_schema_vax="$(PG_SCHEMA_VAX=${pg_schema_vax} envsubst < ${dir_schemas}/${pg_schema_vax}.schema)"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -111,6 +114,7 @@ db_init() {
     $cmd_psql -c "$sql_schema_dis"  > $out #2>&1
     $cmd_psql -c "$sql_schema_geo"  > $out #2>&1
     $cmd_psql -c "$sql_schema_pop"  > $out #2>&1
+    $cmd_psql -c "$sql_schema_vax"  > $out #2>&1
     $cmd_psql -c "VACUUM FULL;"
     echo " done"
 
@@ -430,6 +434,9 @@ case "$cmd" in
 
                 $cmd_py load-dis $3
                 ;;
+            "vax")
+                $cmd_py load-vax
+                ;;                  
             "geo")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
                 req_state_name $3
@@ -530,6 +537,24 @@ case "$cmd" in
                     ORDER BY COUNT(*) DESC;
                 ")
                 echo "$a"
+                echo "    Flu Vaccinations"
+                echo "        Total records  "$($cmd_psql -t -c "
+                    SELECT COUNT(*) FROM $pg_schema_vax.vax;
+                ")                
+                echo "        Date range     "$($cmd_psql -t -c "
+                    SELECT CONCAT(MIN(START_YEAR), ' - ', MAX(END_YEAR)) FROM $pg_schema_vax.vax;
+                ")
+                echo "        Avg. Flu vaccination coverage per year"
+                a=$($cmd_psql -t -c "
+                    SELECT CONCAT('           ', stats.start_year, ':   ', stats.round, '%')
+                    FROM   (SELECT start_year,
+                                   ROUND(AVG(CAST(coverage AS NUMERIC)), 2)
+                            FROM   $pg_schema_vax.vax
+                            WHERE  coverage NOT LIKE '%NR%'
+                            GROUP  BY start_year
+                            ORDER  BY start_year) AS stats  
+                ") 
+                echo "$a"                                            
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)
@@ -570,6 +595,7 @@ case "$cmd" in
         mkdir -p $dir_dl_dis
         mkdir -p $dir_dl_geo
         mkdir -p $dir_dl_pop
+        mkdir -p $dir_dl_vax
         mkdir -p $dir_rt
         mkdir -p $dir_script
         
@@ -577,3 +603,4 @@ case "$cmd" in
         ;;
     *) echo "Commands: db fs help info load setup";;
 esac
+
