@@ -38,12 +38,13 @@ declare -t pg_conn_str=postgresql://${pg_usr}:${pg_pwd}@${pg_host}:${pg_port}/${
     # ?sslmode=require
 
 declare -r dir_root=/usr/share/localedb
-declare -r dir_dl_dis=$dir_root/data/dl/dis
-declare -r dir_dl_geo=$dir_root/data/dl/geo
-declare -r dir_dl_pop=$dir_root/data/dl/pop
-declare -r dir_dl_vax=$dir_root/data/dl/vax
-declare -r dir_rt=$dir_root/data/rt
-declare -r dir_script=$dir_root
+declare -r dir_data_dis=$dir_root/data/dis
+declare -r dir_data_geo=$dir_root/data/geo
+declare -r dir_data_pop=$dir_root/data/pop
+declare -r dir_data_vax=$dir_root/data/vax
+declare -r dir_bin=$dir_root/bin
+declare -r dir_log=$dir_root/log
+declare -r dir_rt=$dir_root/rt
 declare -r dir_pg_data=$dir_root/pg
 declare -r dir_schemas=$dir_root/schemas
 
@@ -57,7 +58,7 @@ declare -r cmd_dropdb="dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg
 declare -r cmd_createdb="createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
 declare -r cmd_pg_isready="pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
 declare -r cmd_psql="psql $pg_conn_str -q"
-declare -r cmd_py="python3 $dir_script/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $dir_rt"
+declare -r cmd_py="python3 $dir_bin/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $dir_log $dir_rt"
 declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
 
 [ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
@@ -78,12 +79,11 @@ declare -a url_geo_bl=("https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/201
 
 declare -a url_pop=("https://gitlab.com/momacs/dataset-pop-us-2010-midas/-/raw/master/zip/" ".zip")
 
-
-declare -r sql_schema_dis="$(PG_SCHEMA_DIS=${pg_schema_dis} PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_dis}.schema)"
-declare -r sql_schema_geo="$(PG_SCHEMA_GEO=${pg_schema_geo} envsubst < ${dir_schemas}/${pg_schema_geo}.schema)"
+declare -r sql_schema_dis="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_DIS=${pg_schema_dis} envsubst < ${dir_schemas}/${pg_schema_dis}.schema)"
+declare -r sql_schema_geo="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_GEO=${pg_schema_geo} envsubst < ${dir_schemas}/${pg_schema_geo}.schema)"
 declare -r sql_schema_main="$(PG_SCHEMA_MAIN=${pg_schema_main} envsubst < ${dir_schemas}/${pg_schema_main}.schema)"
-declare -r sql_schema_pop="$(PG_SCHEMA_POP=${pg_schema_pop} envsubst < ${dir_schemas}/${pg_schema_pop}.schema)"
-declare -r sql_schema_vax="$(PG_SCHEMA_VAX=${pg_schema_vax} envsubst < ${dir_schemas}/${pg_schema_vax}.schema)"
+declare -r sql_schema_pop="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_POP=${pg_schema_pop} envsubst < ${dir_schemas}/${pg_schema_pop}.schema)"
+declare -r sql_schema_vax="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_VAX=${pg_schema_vax} envsubst < ${dir_schemas}/${pg_schema_vax}.schema)"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -106,7 +106,7 @@ db_init() {
     [ "$1" != "1" ] && req_y "Reinitialize the database?"
 
     echo -n "Initializing data structures..."
-    $cmd_dropdb > $out #2>&1
+    $cmd_dropdb   > $out #2>&1
     $cmd_createdb > $out #2>&1
     $cmd_psql -c "SET client_min_messages TO WARNING; CREATE EXTENSION IF NOT EXISTS postgis;"             > $out #2>&1
     $cmd_psql -c "SET client_min_messages TO WARNING; CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" > $out #2>&1
@@ -210,12 +210,12 @@ proc_item_geo() {
     # Download:
     local attempt=""
     local i=1
-    while [ ! -f $dir_dl_geo/$fname.zip ]; do
+    while [ ! -f $dir_data_geo/$fname.zip ]; do
         echo -e -n "\r$1  downloading...$attempt"
-        cd $dir_dl_geo
+        cd $dir_data_geo
         $cmd_dl $2
         if [ $? -ne 0 ]; then
-            rm -f $dir_dl_pop/$fname.zip
+            rm -f $dir_data_pop/$fname.zip
             rm $2
             i=$(echo "$i + 1" | bc)
             attempt=" (attempt $i)"
@@ -229,7 +229,7 @@ proc_item_geo() {
     mkdir -p $dir_rt
     rm -fr $dir_rt/*
 
-    unzip -q $dir_dl_geo/$fname.zip -d $dir_rt
+    unzip -q $dir_data_geo/$fname.zip -d $dir_rt
 
     [ "$4" != "" ] && $cmd_psql -c "DELETE FROM $pg_schema_geo.$3 WHERE statefp10 = '$4'"
     #$cmd_shp2pgsql/$fname.shp $pg_schema_geo.$3 2> $out | $cmd_psql > $out
@@ -253,13 +253,13 @@ proc_item_pop() {
     # Download:
     local attempt=""
     local i=1
-    while [ ! -f $dir_dl_pop/$fname.zip ]; do
+    while [ ! -f $dir_data_pop/$fname.zip ]; do
         echo -e -n "\r$1  downloading...$attempt"
-        cd $dir_dl_pop
+        cd $dir_data_pop
         curl -sO $2
         $cmd_dl $2
         if [ $? -ne 0 ]; then
-            rm -f $dir_dl_pop/$fname.zip
+            rm -f $dir_data_pop/$fname.zip
             i=$(echo "$i + 1" | bc)
             attempt=" (attempt $i)"
         fi
@@ -272,7 +272,7 @@ proc_item_pop() {
     mkdir -p $dir_rt
     rm -fr $dir_rt/*
 
-    unzip -q $dir_dl_pop/$fname.zip -d $dir_rt
+    unzip -q $dir_data_pop/$fname.zip -d $dir_rt
 
     #$cmd_py load-pop-state $3 > $out
     $cmd_py load-pop-state $3
@@ -303,7 +303,7 @@ case "$cmd" in
     "db")
         case "$2" in
             "conn")
-                $cmd_psql_it
+                $cmd_psql
                 ;;
             "exec")
                 req_argn $# 3 "$2 <sql-query>"
@@ -328,8 +328,8 @@ case "$cmd" in
             "rm")
                 case "$3" in
                     "dis")
-                        req_argn $# 4 "$2 $3 <c19|h1n1> [force?]"
-                        [ "$4" != "c19" ] && [ "$4" != "h1n1" ] && { echo "Invalid disease: $3"; exit 1; }
+                        req_argn $# 4 "$2 $3 <COVID-19|H1N1> [force?]"
+                        [ "$4" != "COVID-19" ] && [ "$4" != "H1N1" ] && { echo "Invalid disease: $3"; exit 1; }
 
                         [ "$5" != "1" ] && req_y "Remove all data for disease $4?"
 
@@ -377,11 +377,11 @@ case "$cmd" in
                         fips=$(st_name2fips $4)
                         $cmd_psql -c "
                             BEGIN;
-                            DELETE FROM $pg_schema_pop.school    WHERE st_fips = '$fips';
-                            DELETE FROM $pg_schema_pop.hospital  WHERE st_fips = '$fips';
-                            DELETE FROM $pg_schema_pop.household WHERE st_fips = '$fips';
-                            DELETE FROM $pg_schema_pop.gq        WHERE st_fips = '$fips';
-                            DELETE FROM $pg_schema_pop.workplace WHERE st_fips = '$fips';
+                            DELETE FROM $pg_schema_pop.school    x USING $pg_schema_main.locale l WHERE x.st_id = l.id AND l.fips = '$fips';
+                            DELETE FROM $pg_schema_pop.hospital  x USING $pg_schema_main.locale l WHERE x.st_id = l.id AND l.fips = '$fips';
+                            DELETE FROM $pg_schema_pop.household x USING $pg_schema_main.locale l WHERE x.st_id = l.id AND l.fips = '$fips';
+                            DELETE FROM $pg_schema_pop.gq        x USING $pg_schema_main.locale l WHERE x.st_id = l.id AND l.fips = '$fips';
+                            DELETE FROM $pg_schema_pop.workplace x USING $pg_schema_main.locale l WHERE x.st_id = l.id AND l.fips = '$fips';
                             COMMIT;
                         "
                         [ "$6" != "0" ] && db_analyze
@@ -399,16 +399,16 @@ case "$cmd" in
                 case "$3" in
                     "all")
                         req_y "Remove all downloaded data?"
-                        rm -f $dir_dl_geo/*
-                        rm -f $dir_dl_pop/*
+                        rm -f $dir_data_geo/*
+                        rm -f $dir_data_pop/*
                         ;;
                     "geo")
-                        req_y "Remove downloaded geographic data (i.e., $dir_dl_geo/)?"
-                        rm -f $dir_dl_geo/*
+                        req_y "Remove downloaded geographic data (i.e., $dir_data_geo/)?"
+                        rm -f $dir_data_geo/*
                         ;;
                     "pop")
-                        req_y "Remove downloaded population data (i.e., $dir_dl_pop/)?"
-                        rm -f $dir_dl_pop/*
+                        req_y "Remove downloaded population data (i.e., $dir_data_pop/)?"
+                        rm -f $dir_data_pop/*
                         ;;
                     *) echo "$usage $2{all geo pop}" && exit 1;;
                 esac;;
@@ -429,14 +429,14 @@ case "$cmd" in
     "load")
         case "$2" in
             "dis")
-                req_argn $# 3 "$2 <c19|h1n1>"
-                [ "$3" != "c19" ] && echo "Invalid disease: $3" && exit 1
+                req_argn $# 3 "$2 <COVID-19|H1N1>"
+                [ "$3" != "COVID-19" ] && echo "Invalid disease: $3" && exit 1
 
                 $cmd_py load-dis $3
                 ;;
             "vax")
                 $cmd_py load-vax
-                ;;                  
+                ;;
             "geo")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
                 req_state_name $3
@@ -478,7 +478,7 @@ case "$cmd" in
                 else
                     fips=$(st_name2fips $3)
 
-                    if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_pop.household WHERE st_fips = '$fips';") -gt 0 ]; then
+                    if [ "$4" != "1" ] && [ $(get_int "SELECT COUNT(*) FROM $pg_schema_pop.household h INNER JOIN $pg_schema_main.locale l ON l.id = h.st_id WHERE l.fips = '$fips';") -gt 0 ]; then
                         conf_yn "Population data for that state already exists. Remove it and load again?" || exit 0
                     fi
 
@@ -503,7 +503,7 @@ case "$cmd" in
                 echo "        Country count "$($cmd_psql -t -c "
                     SELECT COUNT(a.*) FROM (SELECT DISTINCT admin0 FROM $pg_schema_main.locale) a;
                 ")
-                echo "    Disease (c19)"
+                echo "    Disease (COVID-19)"
                 echo "        Dynamics"
                 echo "            Locale count                 "$($cmd_psql -t -c "
                     SELECT COUNT(*) FROM (SELECT DISTINCT locale_id FROM $pg_schema_dis.dyn) a;
@@ -540,7 +540,7 @@ case "$cmd" in
                 echo "    Flu Vaccinations"
                 echo "        Total records  "$($cmd_psql -t -c "
                     SELECT COUNT(*) FROM $pg_schema_vax.vax;
-                ")                
+                ")
                 echo "        Date range     "$($cmd_psql -t -c "
                     SELECT CONCAT(MIN(START_YEAR), ' - ', MAX(END_YEAR)) FROM $pg_schema_vax.vax;
                 ")
@@ -552,9 +552,9 @@ case "$cmd" in
                             FROM   $pg_schema_vax.vax
                             WHERE  coverage NOT LIKE '%NR%'
                             GROUP  BY start_year
-                            ORDER  BY start_year) AS stats  
-                ") 
-                echo "$a"                                            
+                            ORDER  BY start_year) AS stats
+                ")
+                echo "$a"
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)
@@ -584,29 +584,24 @@ case "$cmd" in
                 echo "Directory structure"
                 echo "    Root               $dir_root              $(du -sh $dir_root | awk 'END {print $1}')"
                 echo "    Runtime            $dir_rt      $(du -sh $dir_rt | awk 'END {print $1}')"
-                echo "    Disease data       $dir_dl_dis  $(du -sh $dir_dl_dis | awk 'END {print $1}')"
-                echo "    Geographic data    $dir_dl_geo  $(du -sh $dir_dl_geo | awk 'END {print $1}')"
-                echo "    Population data    $dir_dl_pop  $(du -sh $dir_dl_pop | awk 'END {print $1}')"
+                echo "    Log                $dir_log     $(du -sh $dir_log | awk 'END {print $1}')"
+                echo "    Disease data       $dir_data_dis  $(du -sh $dir_data_dis | awk 'END {print $1}')"
+                echo "    Geographic data    $dir_data_geo  $(du -sh $dir_data_geo | awk 'END {print $1}')"
+                echo "    Population data    $dir_data_pop  $(du -sh $dir_data_pop | awk 'END {print $1}')"
                 ;;
             *) echo "$usage $2{all data db fs}" && exit 1;;
         esac;;
     "setup")
         mkdir -p $dir_root
-        mkdir -p $dir_dl_dis
-        mkdir -p $dir_dl_geo
-        mkdir -p $dir_dl_pop
-        mkdir -p $dir_dl_vax
+        mkdir -p $dir_data_dis
+        mkdir -p $dir_data_geo
+        mkdir -p $dir_data_pop
+        mkdir -p $dir_data_vax
+        mkdir -p $dir_bin
+        mkdir -p $dir_log
         mkdir -p $dir_rt
-        mkdir -p $dir_script
-        
+
         db_init 1
         ;;
-    "test")
-        case "$2" in
-            "vax")
-                $cmd_py test-vax
-                ;;                 
-        esac;;        
-    *) echo "Commands: db fs help info load setup";;
+    *) echo "Commands: bash db fs help info load setup";;
 esac
-

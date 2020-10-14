@@ -7,11 +7,13 @@ services:
     env_file:
       - .dockerenv
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - vol_pgdata:/var/lib/postgresql/data
     environment:
       - PGDATA=/var/lib/postgresql/data/pgdata
+    command: postgres -c shared_buffers=1GB -c work_mem=32MB
     ports:
       - "5433:5432"
+    stop_signal: SIGINT
 
   localedb:
     image: localedb:0.0.1
@@ -20,28 +22,40 @@ services:
       - .dockerenv
     tty: true
     volumes:
-      - localedb_data:/usr/share/localedb/data
-      - schema_files:/usr/share/localedb/schemas
-      - ${PWD}/localedb_man.py:/usr/share/localedb/localedb_man.py
-      - ${PWD}/localedb:/usr/local/bin/localedb
+      - vol_bin:/usr/share/localedb/bin
+      - vol_data:/usr/share/localedb/data
+      - vol_log:/usr/share/localedb/log
+      - vol_schemas:/usr/share/localedb/schemas
+      - $HOME/.localedb/bin/localedb:/usr/local/bin/localedb
 
 volumes:
-  pgdata:
+  vol_bin:
     driver: local
     driver_opts:
       type: volume
-      device: ${PWD}/.localedb/pg
+      device: $HOME/.localedb/bin
       o: bind
-  localedb_data:
+  vol_data:
     driver: local
     driver_opts:
       type: volume
-      device: ${PWD}/.localedb/data
+      device: $HOME/.localedb/data
       o: bind
-  schema_files:
+  vol_log:
     driver: local
     driver_opts:
       type: volume
-      device: ${PWD}/schemas
+      device: $HOME/.localedb/log
       o: bind
-
+  vol_pgdata:
+    driver: local
+    driver_opts:
+      type: volume
+      device: $HOME/.localedb/pg
+      o: bind
+  vol_schemas:
+    driver: local
+    driver_opts:
+      type: volume
+      device: $HOME/.localedb/schemas
+      o: bind

@@ -4,32 +4,33 @@
 ## Quick start
 
 ```
-## Build docker container
+## Build docker container:
 ./build-docker.sh
 
-## Start docker and postgis (may take a minute for postgres to become available)
+## Start Docker Postgres (may take a minute for postgres to become available):
 docker-compose up -d
 
-## Setup database
+## Setup database:
 docker-compose run --rm localedb setup
 
-## Load disease data
-docker-compose run --rm localedb load dis c19
+## Load disease data:
+docker-compose run --rm localedb load dis COVID-19
 
-## Load geo data
+## Load geo data:
 docker-compose run --rm localedb load geo AK
 
-## Load population data
+## Load population data:
 docker-compose run --rm localedb load pop AK
 
-## Load vaccination data
+## Load vaccination data:
 docker-compose run --rm localedb load vax
 
-## Test vaccination data ingest
-docker-compose run --rm localedb test vax
-
-## Display Info
+## Display info:
 docker-compose run --rm localedb info all
+
+## Stop Docker Postgres:
+docker-compose stop --timeout 300
+docker-compose down --timeout 300
 ```
 
 
@@ -54,5 +55,3 @@ Removed `is_prod` since script runs in a container
 
 Because the bash script does not live inside the postgres container anymore
 it is not possible to get the fs stats of the postgres data directory
-
-

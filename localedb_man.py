@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """LocaleDB management routines."""
 
+import datetime
 import csv
 import io
 import math
+import numpy as np
 import os
-import re
+import pandas as pd
 import psycopg2
 import psycopg2.extras
 import re
 import sys
 import time
 import urllib.request
-import pandas as pd
-import numpy as np
 
 from abc         import ABC
 from collections import namedtuple
@@ -21,7 +21,8 @@ from pathlib     import Path
 from sqlalchemy  import create_engine
 
 from psycopg2.errors import UniqueViolation
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc  import IntegrityError
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 def req_argn(n):
@@ -60,6 +61,34 @@ class DBI(object):
             self.conn.close()
             self.conn = None
 
+    def is_col(self, col, tbl, schema=None, cursor=None):
+        """Does the column specified exist?
+
+        Args:
+            col (str): Column name.
+            tbl (str): Table name.
+            schema (str, optional): Schema name.
+            cursor (Cursor, optional): DB cursor.
+
+        Returns:
+            bool: True if the column exists; False otherwise.
+
+        If both the ``cursor`` and ``shema`` are ``None``, the ``public`` schema is assumed.  If only ``schema`` is
+        ``None``, a temporary table is assumed and its namespace is used automatically.
+        """
+
+        if schema is None:
+            if cursor is None:
+                schema = "'public'"
+            else:
+                schema = 'pg_my_temp_schema()'
+        else:
+            schema = f"'{schema}'"
+        if cursor is None:
+            cursor = self.conn.cursor()
+        cursor.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = {schema} AND table_name = '{tbl}' AND column_name = '{col}');")
+        return cursor.fetchone()[0]
+
     def vacuum(self, tbl=None, do_full=False):
         self.conn.autocommit = True
         c = self.conn.cursor()
@@ -69,15 +98,37 @@ class DBI(object):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+class FSI(object):
+    """Filesystem interface.
+    """
+
+    def __init__(self, dpath_log, dpath_rt):
+        self.dpath_log = Path(dpath_log)
+        self.dpath_rt  = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
+
+        self.log = None  # log file; open upon request elsewhere
+
+    def __del__(self):
+        if hasattr(self, 'log') and self.log is not None:
+            self.log.close()
+            self.log = None
+
+    def get_log(self):
+        if self.log is None:
+            self.log = open(os.path.join(self.dpath_log, datetime.datetime.now().strftime('%Y-%m-%d %H.%M.%S.%f')), 'w')
+        return self.log
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 class Schema(ABC):
     """Database schema manager.
 
     Manages one type of data type.  Data type are compartmentalized into PostgreSQL's schemas.
     """
 
-    def __init__(self, dbi, dpath_rt, engine=None):
+    def __init__(self, dbi, fsi, engine=None):
         self.dbi = dbi
-        self.dpath_rt = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
+        self.fsi = fsi
         self.engine = engine
 
 
@@ -121,44 +172,44 @@ class DiseaseSchema(Schema):
                 * Good for international data
     """
 
-    URL_DYN_C19_DEAD_GLOB = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv'
-    URL_DYN_C19_DEAD_US   = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv'
-    URL_DYN_C19_CONF_GLOB = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
-    URL_DYN_C19_CONF_US   = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv'
-    URL_DYN_C19_REC_GLOB  = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv'
-    URL_DYN_C19_REC_US    = None  # dataset not available
+    URL_DYN_COVID_19_DEAD_GLOB = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv'
+    URL_DYN_COVID_19_DEAD_US   = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv'
+    URL_DYN_COVID_19_CONF_GLOB = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
+    URL_DYN_COVID_19_CONF_US   = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv'
+    URL_DYN_COVID_19_REC_GLOB  = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv'
+    URL_DYN_COVID_19_REC_US    = None  # dataset not available
 
-    URL_NPI_C19_KEYSTONE = 'https://raw.githubusercontent.com/Keystone-Strategy/covid19-intervention-data/master/complete_npis_inherited_policies.csv'
+    URL_NPI_COVID_19_KEYSTONE = 'https://raw.githubusercontent.com/Keystone-Strategy/covid19-intervention-data/master/complete_npis_inherited_policies.csv'
 
     def load_disease(self, disease):
         {
-            'c19'  : self.load_c19,
-            'h1n1' : self.load_h1n1
+            'COVID-19' : self.load_covid_19,
+            'H1N1'     : self.load_h1n1
         }.get(disease, lambda: print(f'Unknown disease: {disease}'))()
 
-    def load_c19(self):
+    def load_covid_19(self):
         disease_id = None
         with self.dbi.conn.cursor() as c:
-            c.execute(f"INSERT INTO {self.dbi.pg_schema_dis}.disease (name) VALUES ('c19') ON CONFLICT DO NOTHING;")
-            c.execute(f'SELECT id FROM {self.dbi.pg_schema_dis}.disease WHERE name = %s;', ['c19'])
+            c.execute(f"INSERT INTO {self.dbi.pg_schema_dis}.disease (name) VALUES ('COVID-19') ON CONFLICT DO NOTHING;")
+            c.execute(f'SELECT id FROM {self.dbi.pg_schema_dis}.disease WHERE name = %s;', ['COVID-19'])
             disease_id = c.fetchone()[0]
         self.dbi.conn.commit()
 
-        self.load_c19_dyn(disease_id)
-        self.load_c19_npi(disease_id)
+        self.load_covid_19_dyn(disease_id)
+        self.load_covid_19_npi(disease_id)
 
-    def load_c19_dyn(self, disease_id):
+    def load_covid_19_dyn(self, disease_id):
         print(f'Disease dynamics', flush=True)
 
         with self.dbi.conn.cursor() as c:
             c.execute(f'CREATE TEMPORARY TABLE dyn_load (LIKE {self.dbi.pg_schema_dis}.dyn INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES);')
 
-            self.load_c19_dyn_ds(c, disease_id, self.URL_DYN_C19_CONF_GLOB, 'n_conf', 'confirmed', True,  date_col_idx_0=4)
-            self.load_c19_dyn_ds(c, disease_id, self.URL_DYN_C19_DEAD_GLOB, 'n_dead', 'deaths',    True,  date_col_idx_0=4)
-            self.load_c19_dyn_ds(c, disease_id, self.URL_DYN_C19_REC_GLOB,  'n_rec',  'recovered', True,  date_col_idx_0=4)
+            self.load_covid_19_dyn_ds(c, disease_id, self.URL_DYN_COVID_19_CONF_GLOB, 'n_conf', 'confirmed', True,  date_col_idx_0=4)
+            self.load_covid_19_dyn_ds(c, disease_id, self.URL_DYN_COVID_19_DEAD_GLOB, 'n_dead', 'deaths',    True,  date_col_idx_0=4)
+            self.load_covid_19_dyn_ds(c, disease_id, self.URL_DYN_COVID_19_REC_GLOB,  'n_rec',  'recovered', True,  date_col_idx_0=4)
 
-            self.load_c19_dyn_ds(c, disease_id, self.URL_DYN_C19_CONF_US,   'n_conf', 'confirmed', False, date_col_idx_0=12)
-            self.load_c19_dyn_ds(c, disease_id, self.URL_DYN_C19_DEAD_US,   'n_dead', 'deaths',    False, date_col_idx_0=12)
+            self.load_covid_19_dyn_ds(c, disease_id, self.URL_DYN_COVID_19_CONF_US,   'n_conf', 'confirmed', False, date_col_idx_0=12)
+            self.load_covid_19_dyn_ds(c, disease_id, self.URL_DYN_COVID_19_DEAD_US,   'n_dead', 'deaths',    False, date_col_idx_0=12)
 
             print(f'    Consolidating...', end='', flush=True)
             t0 = time.perf_counter()
@@ -168,7 +219,7 @@ class DiseaseSchema(Schema):
         self.dbi.vacuum(f'{self.dbi.pg_schema_dis}.dyn')
         print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
 
-    def load_c19_dyn_ds(self, c, disease_id, url, col, col_human, is_glob, date_col_idx_0, page_size=1024):
+    def load_covid_19_dyn_ds(self, c, disease_id, url, col, col_human, is_glob, date_col_idx_0, page_size=1024):
         print(f'    Loading {"global" if is_glob else "US"} {col_human}...', end='', flush=True)
         t0 = time.perf_counter()
 
@@ -201,17 +252,17 @@ class DiseaseSchema(Schema):
             )
         print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
 
-    def load_c19_npi(self, disease_id):
+    def load_covid_19_npi(self, disease_id):
         print(f'Non-pharmaceutical interventions', flush=True)
 
-        self.load_c19_npi_keystone(disease_id)
+        self.load_covid_19_npi_keystone(disease_id)
 
-    def load_c19_npi_keystone(self, disease_id):
+    def load_covid_19_npi_keystone(self, disease_id):
         print(f'    Loading Keystone...', end='', flush=True)
         t0 = time.perf_counter()
 
         # (1) Extract:
-        res = urllib.request.urlopen(self.URL_NPI_C19_KEYSTONE)
+        res = urllib.request.urlopen(self.URL_NPI_COVID_19_KEYSTONE)
         reader = csv.reader([l.decode('utf-8') for l in res.readlines()])
         header = next(reader)
 
@@ -331,10 +382,10 @@ class PopSchema(Schema):
     '''
 
     COUNTY_TXT_FILES = [
-        CountyTxtFile('schools.txt',    'school',    (False, re.compile(r'^\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')),           f"COPY tmp_school    (id, stco, lat, long)                                                     FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
+        CountyTxtFile('schools.txt',    'school',    (False, re.compile(r'^\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')),           f"COPY tmp_school    (id, stco, lat, long)                                       FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
         CountyTxtFile('hospitals.txt',  'hospital',  (True,  re.compile(r'^\d+\t\d+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_hospital  (id, worker_cnt, physician_cnt, bed_cnt, lat, long)                       FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
-        CountyTxtFile('households.txt', 'household', (False, re.compile(r'^\d+\t\d+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_household (id, stcotrbg, race_id, income, lat, long)                                FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
-        CountyTxtFile('gq.txt',         'gq',        (False, re.compile(r'^\d+\t\w+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_gq        (id, type, stcotrbg, person_cnt, lat, long)                               FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
+        CountyTxtFile('households.txt', 'household', (False, re.compile(r'^\d+\t\d+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_household (id, stcotrbg, race_id, income, lat, long)                  FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
+        CountyTxtFile('gq.txt',         'gq',        (False, re.compile(r'^\d+\t\w+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_gq        (id, type, stcotrbg, person_cnt, lat, long)                 FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
         CountyTxtFile('workplaces.txt', 'workplace', (False, re.compile(r'^\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')),                f"COPY tmp_workplace (id, lat, long)                                                           FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
         CountyTxtFile('people.txt',     'person',    (False, re.compile(r'^\d+\t\d+\t\d+\t[FM]\t\d+\t\d+\t(?:\d+|X)\t(?:\d+|X)$')),    f"COPY tmp_person    (id, household_id, age, sex, race_id, relate_id, school_id, workplace_id) FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", False),
         CountyTxtFile('gq_people.txt',  'gq_person', (False, re.compile(r'^\d+\t\d+\t\d+\t[FM]$')),                                    f"COPY tmp_gq_person (id, gq_id, age, sex)                                                     FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", False)
@@ -343,17 +394,18 @@ class PopSchema(Schema):
     def load_state(self, st_fips):
         """Loads a state to the database.
 
-        The state ZIP file is expected to have been uncompressed to the self.dpath_rt directory.
+        The state ZIP file is expected to have been uncompressed to the self.fsi.dpath_rt directory.
         """
 
+        log = self.fsi.get_log()
         with self.dbi.conn.cursor() as c:
             c.execute(self.__class__.SQL_CREATE_TEMP_TABLES.format(schema=self.dbi.pg_schema_pop))
             c.execute('SET CONSTRAINTS ALL DEFERRED;')
             for ctf in self.__class__.COUNTY_TXT_FILES:
-                self.load_county_txt_files(c, ctf, st_fips)
+                self.load_county_txt_files(c, ctf, st_fips, log)
         self.dbi.conn.commit()
 
-    def load_county_txt_files(self, c, county_txt_file, st_fips):
+    def load_county_txt_files(self, c, county_txt_file, st_fips, log):
         """Process data from the specified county-level file; file of this types for all counties are processed at the
         same time.
 
@@ -370,38 +422,59 @@ class PopSchema(Schema):
         data.  Additionally, a geometry index is created.
         """
 
-        for path_file in self.dpath_rt.rglob(county_txt_file.fname):
+        for path_file in self.fsi.dpath_rt.rglob(county_txt_file.fname):
             if os.path.getsize(path_file) == 0:
                 continue
 
             with open(path_file, 'r') as f01, io.StringIO() as f02:
                 next(f01)
 
+                log.write(f'{str(path_file)}\n')
                 if county_txt_file.ln_re[0]:
                     for ln in f01:
                         if county_txt_file.ln_re[1].match(ln):
                             f02.write(ln)
-                        elif self.rep:
-                            self.rep.write(ln)
+                        else:
+                            log.write(ln)
                     f02.seek(0)
                 else:
                     f02 = f01
 
                 c.copy_expert(county_txt_file.copy_sql.format(schema=self.dbi.pg_schema_pop), f02)
+                tbl = county_txt_file.tbl
 
                 # Store the state FIPS code:
-                c.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tmp_{county_txt_file.tbl}' AND column_name = 'st_fips');")
-                if bool(c.fetchone()[0]):
-                    c.execute(f"UPDATE tmp_{county_txt_file.tbl} SET st_fips = '{st_fips}';")
+                # c.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tmp_{tbl}' AND column_name = 'st_fips');")
+                # if bool(c.fetchone()[0]):
+                #     c.execute(f"UPDATE tmp_{tbl} SET st_fips = '{st_fips}';")
+
+                # Link with the 'main.locale' table:
+                # c.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tmp_{tbl}' AND column_name = 'st_id');")
+                # if bool(c.fetchone()[0]):
+                if self.dbi.is_col('st_id', f'{tbl}', self.dbi.pg_schema_pop):
+                    # c.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tmp_{tbl}' AND column_name = 'stco');")
+                    # if bool(c.fetchone()[0]):
+                    if self.dbi.is_col('stco', f'{tbl}', self.dbi.pg_schema_pop):
+                        # c.execute(f'UPDATE tmp_{tbl} SET st_id = (SELECT l.id FROM main.locale l LEFT JOIN pop.household h ON l.fips = substring(h.stcotrbg from 1 for 2));')
+                        # c.execute(f'UPDATE tmp_{tbl} SET co_id = (SELECT l.id FROM main.locale l LEFT JOIN pop.household h ON l.fips = substring(h.stcotrbg from 3 for 3));')
+                        c.execute(f'UPDATE tmp_{tbl} x SET st_id = l.id FROM main.locale l WHERE l.fips = substring(x.stco from 1 for 2);')
+                        c.execute(f'UPDATE tmp_{tbl} x SET co_id = l.id FROM main.locale l WHERE l.fips = substring(x.stco from 1 for 5);')
+                    # c.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'tmp_{tbl}' AND column_name = 'stcotrbg');")
+                    # if bool(c.fetchone()[0]):
+                    if self.dbi.is_col('stcotrbg', f'{tbl}', self.dbi.pg_schema_pop):
+                        # c.execute(f'UPDATE tmp_{tbl} SET st_id = (SELECT l.id FROM main.locale l LEFT JOIN pop.household h ON l.fips = substring(h.stcotrbg from 1 for 2));')
+                        # c.execute(f'UPDATE tmp_{tbl} SET co_id = (SELECT l.id FROM main.locale l LEFT JOIN pop.household h ON l.fips = substring(h.stcotrbg from 3 for 3));')
+                        c.execute(f'UPDATE tmp_{tbl} x SET st_id = l.id FROM main.locale l WHERE l.fips = substring(x.stcotrbg from 1 for 2);')
+                        c.execute(f'UPDATE tmp_{tbl} x SET co_id = l.id FROM main.locale l WHERE l.fips = substring(x.stcotrbg from 1 for 5);')
 
                 # Update the GEOM column and transform to the target srid:
                 if county_txt_file.upd_coords_col:
-                    c.execute(f"UPDATE tmp_{county_txt_file.tbl} SET coords = ST_GeomFromText('POINT(' || long || ' ' || lat || ')', 4326) WHERE lat != 0 AND long != 0;")
-                    c.execute(f'UPDATE tmp_{county_txt_file.tbl} SET coords = ST_Transform(coords, 4269) WHERE lat != 0 AND long != 0;')
+                    c.execute(f"UPDATE tmp_{tbl} SET coords = ST_GeomFromText('POINT(' || long || ' ' || lat || ')', 4326) WHERE lat != 0 AND long != 0;")
+                    c.execute(f'UPDATE tmp_{tbl} SET coords = ST_Transform(coords, 4269) WHERE lat != 0 AND long != 0;')
 
                 # Populate the destination table:
-                c.execute(f'INSERT INTO {self.dbi.pg_schema_pop}.{county_txt_file.tbl} SELECT * FROM tmp_{county_txt_file.tbl} ON CONFLICT DO NOTHING;')
-                c.execute(f'TRUNCATE tmp_{county_txt_file.tbl};')
+                c.execute(f'INSERT INTO {self.dbi.pg_schema_pop}.{tbl} SELECT * FROM tmp_{tbl} ON CONFLICT DO NOTHING;')
+                c.execute(f'TRUNCATE tmp_{tbl};')
 
     def test(self):
         with self.conn.dbi.cursor() as c:
@@ -432,7 +505,7 @@ class VaxSchema(Schema):
             df_['AGE'] = age
             df_['RACE'] = race
             proc_dfs = proc_dfs.append(df_)
-        return proc_dfs  
+        return proc_dfs
 
     def parse_CI(self, CI):
         """
@@ -458,12 +531,12 @@ class VaxSchema(Schema):
                      '≥18 years': {'age_0': 18, 'age_1': np.nan, 'is_high_risk': False},
                      '≥6 months': {'age_0': 0.5, 'age_1': np.nan, 'is_high_risk': False},
                      '≥65 years': {'age_0': 65, 'age_1': np.nan, 'is_high_risk': False}
-                     }                    
+                     }
         match = age_lookup[row['name']]
         row['age_0'] = match['age_0']
         row['age_1'] = match['age_1']
-        row['is_high_risk'] = match['is_high_risk']    
-        return row            
+        row['is_high_risk'] = match['is_high_risk']
+        return row
 
     def get_locales(self, df):
         locale_df = pd.read_sql("SELECT id, admin1 FROM main.locale WHERE admin0='US' AND admin2 IS NULL;", self.engine)
@@ -474,10 +547,10 @@ class VaxSchema(Schema):
 
     def process_vax_file(self):
         """
-        Major preprocessing of vaccination data from CDC. 
+        Major preprocessing of vaccination data from CDC.
         This function performs a major pivot on the CDC data to convert it from a human-readable
         spreadsheet into a nicely formatted Pandas dataframe.
-        """        
+        """
         df = pd.read_excel('CDC_Fluvax.xlsx', skiprows=2)
         df_headers = pd.read_excel('CDC_Fluvax.xlsx')[:1]
         cols_1 = list(df_headers.columns)[1:]
@@ -492,8 +565,8 @@ class VaxSchema(Schema):
             else:
                 cols_1_.append(i)
                 cols_1_inds[count] = i
-            count += 1        
-                
+            count += 1
+
         cols_2_ = []
         cols_2_inds = {}
         count = 0
@@ -528,13 +601,13 @@ class VaxSchema(Schema):
             race_frames[race] = df_
 
         out_df = pd.DataFrame()
-        for kk, vv in age_frames.items():    
+        for kk, vv in age_frames.items():
             interim_df = self.process_df_(vv, df, age=kk)
             out_df = out_df.append(interim_df)
-            
+
         for kk, vv in race_frames.items():
             interim_df = self.process_df_(vv, df, race=kk)
-            out_df = out_df.append(interim_df)            
+            out_df = out_df.append(interim_df)
 
         out_df = out_df.rename(columns={'Names':'LOCALE'})
         out_df['START_YEAR'] = out_df['DATE'].apply(lambda x: int(x.split('-')[0]))
@@ -555,13 +628,13 @@ class VaxSchema(Schema):
         age_cats = []
         for kk, vv in dict( enumerate(out_df.AGE.cat.categories )).items():
             age_cats.append({'id': kk, 'name': vv})
-            
+
         race_cats = []
         for kk, vv in dict( enumerate(out_df.RACE.cat.categories )).items():
-            race_cats.append({'id': kk, 'name': vv})    
-            
+            race_cats.append({'id': kk, 'name': vv})
+
         age_cats_df = pd.DataFrame(age_cats)
-        race_cats_df = pd.DataFrame(race_cats)        
+        race_cats_df = pd.DataFrame(race_cats)
 
         del(out_df['AGE'])
         del(out_df['RACE'])
@@ -578,7 +651,6 @@ class VaxSchema(Schema):
 
         # update age table with quantitative lookups
         age_cats_df = age_cats_df.apply(lambda x: self.age_parser(x), axis=1)
-
 
         # map locales to main schema
         out_df = self.get_locales(out_df)
@@ -600,68 +672,30 @@ class VaxSchema(Schema):
             assert isinstance(e.orig, UniqueViolation)
             print("Vaccination data is already loaded in LocaleDB.")
 
-
     def test(self):
-        with self.dbi.conn.cursor() as c:
-            '''
-            SELECT CI FROM vax LEFT JOIN age ON age.id = vax.age_id WHERE name = '≥6 months' AND start_year = 2010 AND locale_name='Louisiana';
-            ==2.1
-            '''
-            queries = [
-                        (
-                            f"SELECT ci FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.age ON age.id = vax.age_id\
-                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
-                              WHERE name = '≥6 months' AND start_year = 2010 AND admin1='Louisiana';",
-                            2.1
-                        ),
-                        (
-                            f"SELECT sample FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.age ON age.id = vax.age_id\
-                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
-                              WHERE name = '18-64 years at high risk' AND start_year = 2016 AND admin1='Oregon';",
-                            708.0
-                        ),
-                        (
-                            f"SELECT coverage FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.age ON age.id = vax.age_id\
-                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
-                              WHERE name = '18-49 years at high risk' AND start_year = 2014 AND admin1='Wyoming'",
-                            33.8
-                        ),  
-                        (
-                            f"SELECT coverage FROM {self.dbi.pg_schema_vax}.vax LEFT JOIN {self.dbi.pg_schema_vax}.race ON race.id = vax.race_id\
-                              LEFT JOIN (SELECT id, admin1 FROM {self.dbi.pg_schema_main}.locale) AS loc ON vax.locale_id = loc.id\
-                              WHERE name = 'Hispanic' AND start_year = 2014 AND admin1='California';",
-                            40.7
-                        ),                                                                        
-                      ]
-
-            for q in queries:
-                c.execute(q[0])
-                result = float(c.fetchone()[0])
-                try:
-                    assert result == q[1]
-                    print(f'SUCCESS: {result} (query result) equals {q[1]} (expected result).')
-                except:
-                    print(f"##########\nTEST FAILURE: \n{result} (query result) does not equal {q[1]} (expected result) for query:\n{re.sub(' +', ' ',q[0])}\n##########\n")
+        with self.conn.dbi.cursor() as c:
+            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_vax}.vax;')
+            print(c.fetchone().n)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, dpath_rt):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, dpath_log, dpath_rt):
         self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax)
+        self.fsi = FSI(dpath_log, dpath_rt)
         self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
-        self.dpath_rt = dpath_rt
 
     def get_dis(self):
-        return DiseaseSchema(self.dbi, self.dpath_rt)
+        return DiseaseSchema(self.dbi, self.fsi)
 
     def get_main(self):
-        return MainSchema(self.dbi, self.dpath_rt)
+        return MainSchema(self.dbi, self.fsi)
 
     def get_pop(self):
-        return PopSchema(self.dbi, self.dpath_rt)
+        return PopSchema(self.dbi, self.fsi)
 
     def get_vax(self):
-        return VaxSchema(self.dbi, self.dpath_rt, self.engine)        
+        return VaxSchema(self.dbi, self.fsi, self.engine)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -670,24 +704,21 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    if len(sys.argv[1:]) < 12:
-        print(f'Incorrect number of arguments; at least 11 are required.')
+    if len(sys.argv[1:]) < 13:
+        print(f'Incorrect number of arguments; at least 13 are required.')
         sys.exit(1)
 
-    if sys.argv[12] == 'load-dis':
+    if sys.argv[13] == 'load-dis':
+        req_argn(14)
+        LocaleDB(*sys.argv[1:13]).get_dis().load_disease(sys.argv[14])
+    elif sys.argv[13] == 'load-main':
+        LocaleDB(*sys.argv[1:13]).get_main().load_locales()
+    elif sys.argv[13] == 'load-pop-state':
+        req_argn(14)
+        LocaleDB(*sys.argv[1:13]).get_pop().load_state(sys.argv[14])
+    elif sys.argv[13] == 'load-vax':
         req_argn(13)
-        LocaleDB(*sys.argv[1:12]).get_dis().load_disease(sys.argv[13])
-    elif sys.argv[12] == 'load-main':
-        LocaleDB(*sys.argv[1:12]).get_main().load_locales()
-    elif sys.argv[12] == 'load-pop-state':
-        req_argn(13)
-        LocaleDB(*sys.argv[1:12]).get_pop().load_state(sys.argv[13])
-    elif sys.argv[12] == 'load-vax':
-        req_argn(12)
-        LocaleDB(*sys.argv[1:12]).get_vax().load_vax()        
-    elif sys.argv[12] == 'test-vax':
-        req_argn(12)
-        LocaleDB(*sys.argv[1:12]).get_vax().test()        
+        LocaleDB(*sys.argv[1:13]).get_vax().load_vax()
     else:
-        print(f'Unknown command: {sys.argv[12]}')
+        print(f'Unknown command: {sys.argv[13]}')
         sys.exit(1)
