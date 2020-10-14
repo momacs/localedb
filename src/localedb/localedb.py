@@ -123,14 +123,14 @@ class LocaleDB(object):
         if do_get_conf:
             res.res['conf'] = np.array(
                 self._exec_get(
-                    'SELECT n_conf FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i',
+                    'SELECT n_conf FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i;',
                     [self.disease_id, self.locale_id, day_from, day_to]
                 )
             )
         if do_get_dead:
             res.res['dead'] = np.array(
                 self._exec_get(
-                    'SELECT n_dead FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i',
+                    'SELECT n_dead FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i;',
                     [self.disease_id, self.locale_id, day_from, day_to]
                 )
             )
@@ -144,7 +144,7 @@ class LocaleDB(object):
         if conf:
             conf_obs = np.array(
                 self._exec_get(
-                    'SELECT n_conf FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i',
+                    'SELECT n_conf FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i;',
                     [self.disease_id, self.locale_id, day_from, day_to]
                 )
             )
@@ -154,7 +154,7 @@ class LocaleDB(object):
         if dead:
             dead_obs = np.array(
                 self._exec_get(
-                    'SELECT n_dead FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i',
+                    'SELECT n_dead FROM dis.dyn WHERE disease_id = %s AND locale_id = %s AND day_i BETWEEN %s AND %s ORDER BY day_i;',
                     [self.disease_id, self.locale_id, day_from, day_to]
                 )
             )
@@ -204,6 +204,29 @@ class LocaleDB(object):
             return self._exec_get('SELECT COUNT(*) FROM pop.person p INNER JOIN pop.household h ON p.household_id = h.id INNER JOIN main.locale l ON h.co_id = l.id WHERE l.fips = %s;', [self.locale_fips])[0][0]
         else:
             raise ValueError('Incorrect FIPS code: {self.locale_fips}')
+
+    def get_synth_pop(self, cols=['age'], limit=0):
+        self._req_locale(True)
+        limit = f'LIMIT {limit}' if limit > 0 else ''
+        if len(self.locale_fips) == 2:    # US state
+            loale_id_col = 'st_id'
+        elif len(self.locale_fips) == 5:  # US county
+            loale_id_col = 'co_id'
+        return Result(
+            np.array(
+                self._exec_get(
+                    f'''
+                    SELECT {",".join(cols)}
+                    FROM pop.person p
+                    INNER JOIN pop.household h ON p.household_id = h.id
+                    INNER JOIN main.locale l ON h.{loale_id_col} = l.id
+                    WHERE l.id = %s
+                    ORDER BY p.id {limit};
+                    ''',
+                    [self.locale_id]
+                )
+            )
+        )
 
     def is_locale_us(self):
         return self.locale_id is not None and self.locale_iso_num == 840
@@ -257,6 +280,10 @@ if __name__ == '__main__':
         dd = db.get_dis_dyn_by_day(do_get_conf=True, day_from=1, day_to=sys.maxsize)
         print(f"{db.locale_id}: {dd.res['conf'].size}  {dd.res['conf'].flatten().tolist()[:48]}")
 
+    def disp_synth_pop(db):
+        pop = db.get_synth_pop(['sex', 'age', 'WIDTH_BUCKET(age::INTEGER,ARRAY[18,60]) AS age_grp'], limit=8)
+        print(pop.res.tolist())
+
     db = LocaleDB()
     db.set_disease('COVID-19')
 
@@ -276,10 +303,14 @@ if __name__ == '__main__':
     # db.set_locale_by_us_fips('42003')                         ; disp_locale_inf(db)
 
     # Test disease dynamics queries:
-    db.set_locale_by_name('China')                            ; disp_locale_dis_dyn_by_day(db)
-    db.set_locale_by_name('Italy')                            ; disp_locale_dis_dyn_by_day(db)
-    db.set_locale_by_name('US')                               ; disp_locale_dis_dyn_by_day(db)
-    db.set_locale_by_name('US', 'Alaska')                     ; disp_locale_dis_dyn_by_day(db)
-    db.set_locale_by_name('US', 'Alaska', 'Anchorage')        ; disp_locale_dis_dyn_by_day(db)
-    db.set_locale_by_name('US', 'Pennsylvania')               ; disp_locale_dis_dyn_by_day(db)
-    db.set_locale_by_name('US', 'Pennsylvania', 'Allegheny')  ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('China')                            ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('Italy')                            ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('US')                               ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('US', 'Alaska')                     ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('US', 'Alaska', 'Anchorage')        ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('US', 'Pennsylvania')               ; disp_locale_dis_dyn_by_day(db)
+    # db.set_locale_by_name('US', 'Pennsylvania', 'Allegheny')  ; disp_locale_dis_dyn_by_day(db)
+
+    # Test synthetic population queries:
+    db.set_locale_by_name('US', 'Pennsylvania')               ; disp_synth_pop(db)
+    db.set_locale_by_name('US', 'Pennsylvania', 'Allegheny')  ; disp_synth_pop(db)
