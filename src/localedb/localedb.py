@@ -385,24 +385,3 @@ if __name__ == '__main__':
     db.set_locale_by_name('US', 'Pennsylvania')               ; disp_synth_pop(db)
     db.set_locale_by_name('US', 'Pennsylvania', 'Allegheny')  ; disp_synth_pop(db)
     db.set_locale_by_name('US', 'Pennsylvania', 'Adams')      ; disp_synth_pop(db)
-
-
-# db.set_locale_by_name('US', 'Pennsylvania')
-# pop = db.get_synth_pop(['sex', 'age', 'p.race_id', 'income', 'CASE WHEN school_id IS NULL THEN 0 ELSE 1 END AS is_student', 'CASE WHEN workplace_id IS NULL THEN 0 ELSE 1 END is_worker'])
-# with open('/Users/tomek/pa.npy', 'wb') as f:
-#     np.save(f, pop)
-
-# db.set_locale_by_name('US', 'Pennsylvania', 'Allegheny')
-# pop = db.get_synth_pop(['sex', 'age', 'p.race_id', 'income', 'CASE WHEN school_id IS NULL THEN 0 ELSE 1 END AS is_student', 'CASE WHEN workplace_id IS NULL THEN 0 ELSE 1 END is_worker'], itersize=1000)
-# with open('/Users/tomek/pa-allegheny.npy', 'wb') as f:
-#     np.save(f, pop)
-#    0: 23.031s 22.797s
-# 1000: 23.875
-
-# db.set_locale_by_name('US', 'Pennsylvania', 'Adams')
-# pop = db.get_synth_pop(['sex', 'age', 'p.race_id', 'income', 'CASE WHEN school_id IS NULL THEN 0 ELSE 1 END AS is_student', 'CASE WHEN workplace_id IS NULL THEN 0 ELSE 1 END is_worker'])
-# with open('/Users/tomek/pa-adams.npy', 'wb') as f:
-#     np.save(f, pop)
-
-# process = psutil.Process(os.getpid())
-# print(process.memory_info().rss)  # [B]
