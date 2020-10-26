@@ -51,10 +51,10 @@ coords     geometry
 );
 
 CREATE UNLOGGED TABLE $PG_SCHEMA_POP.workplace (
-id      INTEGER PRIMARY KEY,  -- sp_id
-lat     DOUBLE PRECISION NOT NULL,
-long    DOUBLE PRECISION NOT NULL,
-coords  GEOMETRY
+id     INTEGER PRIMARY KEY,  -- sp_id
+lat    DOUBLE PRECISION NOT NULL,
+long   DOUBLE PRECISION NOT NULL,
+coords GEOMETRY
 );
 
 CREATE UNLOGGED TABLE $PG_SCHEMA_POP.person (
@@ -69,10 +69,10 @@ workplace_id INTEGER REFERENCES $PG_SCHEMA_POP.workplace (id) ON DELETE CASCADE 
 );
 
 CREATE UNLOGGED TABLE $PG_SCHEMA_POP.gq_person (
-id     INTEGER NOT NULL PRIMARY KEY,                                                            -- sp_id
-gq_id  INTEGER NOT NULL REFERENCES $PG_SCHEMA_POP.gq (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- sp_gq_id
-age    SMALLINT NOT NULL,
-sex    CHAR(1) NOT NULL
+id    INTEGER NOT NULL PRIMARY KEY,                                                            -- sp_id
+gq_id INTEGER NOT NULL REFERENCES $PG_SCHEMA_POP.gq (id) ON DELETE CASCADE ON UPDATE CASCADE,  -- sp_gq_id
+age   SMALLINT NOT NULL,
+sex   CHAR(1) NOT NULL
 );
 
 CREATE INDEX person__household_id__fk_idx ON $PG_SCHEMA_POP.person    (household_id);
