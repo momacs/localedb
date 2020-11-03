@@ -1,0 +1,987 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": 3,
+  "iteration": 1604364094951,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "LocaleDB",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": null,
+            "filterable": false
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "7.2.1",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  --v.locale_id::text as id,\n  v.start_year::text,\n  avg(v.coverage),\n  to_timestamp(v.start_year::text, 'YYYY') as time\nFROM\n  vax.vax as v, main.locale as l, vax.race as r\nwhere v.locale_id = l.id\nand v.race_id = r.id \nand r.name = '$race'\nand l.admin1 = '$locale'\ngroup by l.admin1, r.name, v.start_year\norder by time",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "$locale - $race ",
+      "type": "gauge"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "7.2.1",
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  --v.locale_id::text as id,\n  v.start_year::text,\n  avg(v.coverage),\n  to_timestamp(v.start_year::text, 'YYYY') as time\nFROM\n  vax.vax as v, main.locale as l, vax.age as a\nwhere v.locale_id = l.id\nand v.age_id = a.id \nand a.name = '$age'\nand l.admin1 = '$locale'\ngroup by l.admin1, a.name, v.start_year\norder by time\n\n",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "$locale - $age",
+      "type": "gauge"
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 0,
+        "y": 9
+      },
+      "hiddenSeries": false,
+      "id": 6,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.2.1",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  --v.locale_id::text as id,\n  '$race',\n  avg(v.coverage),\n  to_timestamp(v.start_year::text, 'YYYY') as time\nFROM\n  vax.vax as v, main.locale as l, vax.race as r\nwhere v.locale_id = l.id\nand v.race_id = r.id \nand r.name = '$race'\nand l.admin1 = '$locale'\ngroup by l.admin1, r.name, v.start_year\norder by time\n\n",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        },
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  --v.locale_id::text as id,\n  '$age',\n  avg(v.coverage),\n  to_timestamp(v.start_year::text, 'YYYY') as time\nFROM\n  vax.vax as v, main.locale as l, vax.age as a\nwhere v.locale_id = l.id\nand v.age_id = a.id \nand a.name = '$age'\nand l.admin1 = '$locale'\ngroup by l.admin1, a.name, v.start_year\norder by time\n",
+          "refId": "B",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Coverage % for $locale",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:3605",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": "100",
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:3606",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": null,
+            "filterable": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 16
+      },
+      "hiddenSeries": false,
+      "id": 14,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "7.2.1",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  l.admin1 || ' race',\n  to_timestamp(v.start_year::text, 'YYYY') as time,\n  avg(v.coverage)\nFROM\n  vax.vax as v, main.locale as l, vax.race as r\nwhere v.locale_id = l.id\nand v.race_id = r.id \nand r.name = '$race'\nand v.coverage is not null\ngroup by l.admin1, r.name, v.start_year\norder by l.admin1, time\n",
+          "refId": "A",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        },
+        {
+          "format": "time_series",
+          "group": [],
+          "metricColumn": "none",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  l.admin1 || ' age',\n  avg(v.coverage),\n  to_timestamp(v.start_year::text, 'YYYY') as time\nFROM\n  vax.vax as v, main.locale as l, vax.age as a\nwhere v.locale_id = l.id\nand v.age_id = a.id \nand a.name = '$age'\ngroup by l.admin1, a.name, v.start_year\norder by l.admin1, time\n",
+          "refId": "B",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "column"
+              }
+            ]
+          ],
+          "timeColumn": "time",
+          "where": [
+            {
+              "name": "$__timeFilter",
+              "params": [],
+              "type": "macro"
+            }
+          ]
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Race - $race",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:5750",
+          "decimals": null,
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": "100",
+          "min": "0",
+          "show": true
+        },
+        {
+          "$$hashKey": "object:5751",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    }
+  ],
+  "refresh": false,
+  "schemaVersion": 26,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "California",
+          "value": "California"
+        },
+        "datasource": "PostgreSQL",
+        "definition": "select admin1 from main.locale where admin0 = 'US'",
+        "hide": 0,
+        "includeAll": false,
+        "label": null,
+        "multi": false,
+        "name": "locale",
+        "options": [
+          {
+            "selected": false,
+            "value": null
+          },
+          {
+            "selected": false,
+            "text": "American Samoa",
+            "value": "American Samoa"
+          },
+          {
+            "selected": false,
+            "text": "Guam",
+            "value": "Guam"
+          },
+          {
+            "selected": false,
+            "text": "Northern Mariana Islands",
+            "value": "Northern Mariana Islands"
+          },
+          {
+            "selected": false,
+            "text": "Virgin Islands",
+            "value": "Virgin Islands"
+          },
+          {
+            "selected": false,
+            "text": "Puerto Rico",
+            "value": "Puerto Rico"
+          },
+          {
+            "selected": false,
+            "text": "Diamond Princess",
+            "value": "Diamond Princess"
+          },
+          {
+            "selected": false,
+            "text": "Grand Princess",
+            "value": "Grand Princess"
+          },
+          {
+            "selected": false,
+            "text": "Alabama",
+            "value": "Alabama"
+          },
+          {
+            "selected": true,
+            "text": "Alaska",
+            "value": "Alaska"
+          },
+          {
+            "selected": false,
+            "text": "Arizona",
+            "value": "Arizona"
+          },
+          {
+            "selected": false,
+            "text": "Arkansas",
+            "value": "Arkansas"
+          },
+          {
+            "selected": false,
+            "text": "California",
+            "value": "California"
+          },
+          {
+            "selected": false,
+            "text": "Colorado",
+            "value": "Colorado"
+          },
+          {
+            "selected": false,
+            "text": "Connecticut",
+            "value": "Connecticut"
+          },
+          {
+            "selected": false,
+            "text": "Delaware",
+            "value": "Delaware"
+          },
+          {
+            "selected": false,
+            "text": "District of Columbia",
+            "value": "District of Columbia"
+          },
+          {
+            "selected": false,
+            "text": "Florida",
+            "value": "Florida"
+          },
+          {
+            "selected": false,
+            "text": "Georgia",
+            "value": "Georgia"
+          },
+          {
+            "selected": false,
+            "text": "Hawaii",
+            "value": "Hawaii"
+          },
+          {
+            "selected": false,
+            "text": "Idaho",
+            "value": "Idaho"
+          },
+          {
+            "selected": false,
+            "text": "Illinois",
+            "value": "Illinois"
+          },
+          {
+            "selected": false,
+            "text": "Indiana",
+            "value": "Indiana"
+          },
+          {
+            "selected": false,
+            "text": "Iowa",
+            "value": "Iowa"
+          },
+          {
+            "selected": false,
+            "text": "Kansas",
+            "value": "Kansas"
+          },
+          {
+            "selected": false,
+            "text": "Kentucky",
+            "value": "Kentucky"
+          },
+          {
+            "selected": false,
+            "text": "Louisiana",
+            "value": "Louisiana"
+          },
+          {
+            "selected": false,
+            "text": "Maine",
+            "value": "Maine"
+          },
+          {
+            "selected": false,
+            "text": "Maryland",
+            "value": "Maryland"
+          },
+          {
+            "selected": false,
+            "text": "Massachusetts",
+            "value": "Massachusetts"
+          },
+          {
+            "selected": false,
+            "text": "Michigan",
+            "value": "Michigan"
+          },
+          {
+            "selected": false,
+            "text": "Minnesota",
+            "value": "Minnesota"
+          },
+          {
+            "selected": false,
+            "text": "Mississippi",
+            "value": "Mississippi"
+          },
+          {
+            "selected": false,
+            "text": "Missouri",
+            "value": "Missouri"
+          },
+          {
+            "selected": false,
+            "text": "Montana",
+            "value": "Montana"
+          },
+          {
+            "selected": false,
+            "text": "Nebraska",
+            "value": "Nebraska"
+          },
+          {
+            "selected": false,
+            "text": "Nevada",
+            "value": "Nevada"
+          },
+          {
+            "selected": false,
+            "text": "New Hampshire",
+            "value": "New Hampshire"
+          },
+          {
+            "selected": false,
+            "text": "New Jersey",
+            "value": "New Jersey"
+          },
+          {
+            "selected": false,
+            "text": "New Mexico",
+            "value": "New Mexico"
+          },
+          {
+            "selected": false,
+            "text": "New York",
+            "value": "New York"
+          },
+          {
+            "selected": false,
+            "text": "North Carolina",
+            "value": "North Carolina"
+          },
+          {
+            "selected": false,
+            "text": "North Dakota",
+            "value": "North Dakota"
+          },
+          {
+            "selected": false,
+            "text": "Ohio",
+            "value": "Ohio"
+          },
+          {
+            "selected": false,
+            "text": "Oklahoma",
+            "value": "Oklahoma"
+          },
+          {
+            "selected": false,
+            "text": "Oregon",
+            "value": "Oregon"
+          },
+          {
+            "selected": false,
+            "text": "Pennsylvania",
+            "value": "Pennsylvania"
+          },
+          {
+            "selected": false,
+            "text": "Rhode Island",
+            "value": "Rhode Island"
+          },
+          {
+            "selected": false,
+            "text": "South Carolina",
+            "value": "South Carolina"
+          },
+          {
+            "selected": false,
+            "text": "South Dakota",
+            "value": "South Dakota"
+          },
+          {
+            "selected": false,
+            "text": "Tennessee",
+            "value": "Tennessee"
+          },
+          {
+            "selected": false,
+            "text": "Texas",
+            "value": "Texas"
+          },
+          {
+            "selected": false,
+            "text": "Utah",
+            "value": "Utah"
+          },
+          {
+            "selected": false,
+            "text": "Vermont",
+            "value": "Vermont"
+          },
+          {
+            "selected": false,
+            "text": "Virginia",
+            "value": "Virginia"
+          },
+          {
+            "selected": false,
+            "text": "Washington",
+            "value": "Washington"
+          },
+          {
+            "selected": false,
+            "text": "West Virginia",
+            "value": "West Virginia"
+          },
+          {
+            "selected": false,
+            "text": "Wisconsin",
+            "value": "Wisconsin"
+          },
+          {
+            "selected": false,
+            "text": "Wyoming",
+            "value": "Wyoming"
+          },
+          {
+            "selected": false,
+            "text": "Recovered",
+            "value": "Recovered"
+          },
+          {
+            "selected": false,
+            "text": "US Military",
+            "value": "US Military"
+          },
+          {
+            "selected": false,
+            "text": "Federal Bureau of Prisons",
+            "value": "Federal Bureau of Prisons"
+          },
+          {
+            "selected": false,
+            "text": "Veteran Hospitals",
+            "value": "Veteran Hospitals"
+          }
+        ],
+        "query": "select admin1 from main.locale where admin0 = 'US'",
+        "refresh": 0,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "Hispanic",
+          "value": "Hispanic"
+        },
+        "datasource": "PostgreSQL",
+        "definition": "select name from vax.race",
+        "hide": 0,
+        "includeAll": false,
+        "label": null,
+        "multi": false,
+        "name": "race",
+        "options": [
+          {
+            "selected": false,
+            "text": "Black only, non-Hispanic",
+            "value": "Black only, non-Hispanic"
+          },
+          {
+            "selected": true,
+            "text": "Hispanic",
+            "value": "Hispanic"
+          },
+          {
+            "selected": false,
+            "text": "Other or multiple races, non-Hispanic",
+            "value": "Other or multiple races, non-Hispanic"
+          },
+          {
+            "selected": false,
+            "text": "White only, non-Hispanic",
+            "value": "White only, non-Hispanic"
+          }
+        ],
+        "query": "select name from vax.race",
+        "refresh": 0,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "18-49 years",
+          "value": "18-49 years"
+        },
+        "datasource": "PostgreSQL",
+        "definition": "select name from vax.age",
+        "hide": 0,
+        "includeAll": false,
+        "label": "age group",
+        "multi": false,
+        "name": "age",
+        "options": [
+          {
+            "selected": false,
+            "text": "13-17 years",
+            "value": "13-17 years"
+          },
+          {
+            "selected": false,
+            "text": "18-49 years",
+            "value": "18-49 years"
+          },
+          {
+            "selected": false,
+            "text": "18-49 years at high risk",
+            "value": "18-49 years at high risk"
+          },
+          {
+            "selected": false,
+            "text": "18-49 years not at high risk",
+            "value": "18-49 years not at high risk"
+          },
+          {
+            "selected": false,
+            "text": "18-64 years",
+            "value": "18-64 years"
+          },
+          {
+            "selected": false,
+            "text": "18-64 years at high risk",
+            "value": "18-64 years at high risk"
+          },
+          {
+            "selected": false,
+            "text": "18-64 years not at high risk",
+            "value": "18-64 years not at high risk"
+          },
+          {
+            "selected": false,
+            "text": "5-12 years",
+            "value": "5-12 years"
+          },
+          {
+            "selected": false,
+            "text": "50-64 years",
+            "value": "50-64 years"
+          },
+          {
+            "selected": true,
+            "text": "6 months - 17 years",
+            "value": "6 months - 17 years"
+          },
+          {
+            "selected": false,
+            "text": "6 months - 4 years",
+            "value": "6 months - 4 years"
+          },
+          {
+            "selected": false,
+            "text": "≥18 years",
+            "value": "≥18 years"
+          },
+          {
+            "selected": false,
+            "text": "≥6 months",
+            "value": "≥6 months"
+          },
+          {
+            "selected": false,
+            "text": "≥65 years",
+            "value": "≥65 years"
+          }
+        ],
+        "query": "select name from vax.age",
+        "refresh": 0,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      }
+    ]
+  },
+  "time": {
+    "from": "now-12y",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Vax Dashboard",
+  "version": 1
+}

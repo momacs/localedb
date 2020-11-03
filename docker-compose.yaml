@@ -15,6 +15,19 @@ services:
       - "5433:5432"
     stop_signal: SIGINT
 
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ${PWD}/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      - ${PWD}/grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml
+      - ${PWD}/grafana/home.json:/usr/share/grafana/public/dashboards/home.json
+      - ${PWD}/grafana/dashboards:/etc/dashboards
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: sa
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+
   localedb:
     image: localedb:0.0.1
     container_name: localedb
