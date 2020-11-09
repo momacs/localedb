@@ -179,6 +179,12 @@ AK blocks        done
 Analyzing database... done
 ```
 
+To import health data for the state of Alaska, run:
+
+```
+$ localedb load health AK
+```
+
 To import synthetic population data, run:
 
 ```
@@ -279,6 +285,9 @@ docker-compose run --rm localedb load geo AK
 
 ## Load population data:
 docker-compose run --rm localedb load pop AK
+
+## Load health data:
+docker-compose run --rm localedb load health AK
 ```
 
 You can stop the containers with:

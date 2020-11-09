@@ -42,7 +42,7 @@ class DBI(object):
     """Database interface.
     """
 
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, cursor_factory=psycopg2.extras.NamedTupleCursor):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, cursor_factory=psycopg2.extras.NamedTupleCursor):
         self.pg_host        = pg_host
         self.pg_port        = pg_port
         self.pg_usr         = pg_usr
@@ -53,6 +53,7 @@ class DBI(object):
         self.pg_schema_main = pg_schema_main
         self.pg_schema_pop  = pg_schema_pop
         self.pg_schema_vax  = pg_schema_vax
+        self.pg_schema_health  = pg_schema_health
 
         self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
 
@@ -679,9 +680,102 @@ class VaxSchema(Schema):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+class HealthSchema(Schema):
+    """County Health Rankings 2020 Health Trends from https://www.countyhealthrankings.org/explore-health-rankings/rankings-data-documentation
+    Original data available here: https://www.countyhealthrankings.org/sites/default/files/media/document/CHR_trends_csv_2020.csv
+
+    Data mirror: https://world-modelers.s3.amazonaws.com/data/CHR/CHR_trends_csv_2020.csv
+    """
+
+    def format_row(self, row):
+        """
+        Fixes start_year and end_year
+        also formats FIPS column
+        """
+        if len(row.yearspan)>4:
+            row['start_year'] = int(row.yearspan.split('-')[0])
+            row['end_year'] = int(row.yearspan.split('-')[1])        
+        else:
+            row['start_year'] = int(row.yearspan)
+            row['end_year'] = int(row.yearspan)
+
+        st = str(row.statecode)
+        ct = str(row.countycode)
+        if len(st) == 1:
+            st = '0'+ st
+        if len(ct) == 1:
+            ct = '00' + ct
+        elif len(ct) == 2:
+            ct = '0' + ct
+        
+
+        if st == '00': # for all of US
+            row['fips'] = '840'
+
+        elif ct == '000': # for a state
+            row['fips'] = '000' + st
+        else: # for a county
+            row['fips'] = st + ct
+        return row        
+
+    def get_locales(self, df):
+        locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
+        df = df.join(locale_df.set_index('fips'), how='inner', on='fips')
+        df = df.rename(columns = {'id': 'locale_id'})
+        del(df['fips'])
+        return df
+
+    def process_health_file(self, st_fips):
+        """
+        Major preprocessing of vaccination data from CDC.
+        This function performs a major pivot on the CDC data to convert it from a human-readable
+        spreadsheet into a nicely formatted Pandas dataframe.
+        """
+        df = pd.read_csv("CHR_trends_csv_2020.csv", encoding = "ISO-8859-1", thousands=",", low_memory=False)
+        if st_fips != '-':
+            df = df[df['state']==st_fips]
+        df['yearspan'] = df['yearspan'].apply(lambda x: str(x))
+        df['differflag'] = df.differflag.replace(1, True).fillna(False)
+        df['trendbreak'] = df.trendbreak.replace(1, True).fillna(False)
+        df = df.apply(lambda row: self.format_row(row), axis=1)
+        df = self.get_locales(df)
+        df['measure_id'] = df['measureid']
+        df = df[['locale_id','measure_id','start_year','end_year','numerator','denominator','rawvalue','cilow','cihigh','chrreleaseyear','differflag','trendbreak']]
+        df.chrreleaseyear = df.chrreleaseyear.astype("Int64")
+        return df
+
+    def load_health(self, st_fips):
+        """
+        Loads Flu vaccine data to database.
+        Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
+        """
+        urllib.request.urlretrieve('https://world-modelers.s3.amazonaws.com/data/CHR/CHR_trends_csv_2020.csv', 'CHR_trends_csv_2020.csv')
+        urllib.request.urlretrieve('https://world-modelers.s3.amazonaws.com/data/CHR/CHR_measures.csv', 'CHR_measures.csv')
+        health = self.process_health_file(st_fips)
+        measures = pd.read_csv("CHR_measures.csv")
+        try:
+            measures.to_sql('measures', con=self.engine, schema=self.dbi.pg_schema_health, index=False, if_exists='append')
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print("Health measures metadata is already loaded in LocaleDB.")
+
+        try:
+            health.to_sql('health', con=self.engine, schema=self.dbi.pg_schema_health, index=False, if_exists='append')
+            print(f"Loaded health data for {st_fips} successfully.")
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print(f"Health data for {st_fips} is already loaded in LocaleDB.")            
+
+    def test(self):
+        with self.conn.dbi.cursor() as c:
+            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_health}.health;')
+            print(c.fetchone().n)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, dpath_log, dpath_rt):
-        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax)
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, dpath_log, dpath_rt):
+        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health)
         self.fsi = FSI(dpath_log, dpath_rt)
         self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
 
@@ -697,6 +791,9 @@ class LocaleDB(object):
     def get_vax(self):
         return VaxSchema(self.dbi, self.fsi, self.engine)
 
+    def get_health(self):
+        return HealthSchema(self.dbi, self.fsi, self.engine)        
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -704,21 +801,24 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    if len(sys.argv[1:]) < 13:
+    if len(sys.argv[1:]) < 14:
         print(f'Incorrect number of arguments; at least 13 are required.')
         sys.exit(1)
 
-    if sys.argv[13] == 'load-dis':
+    if sys.argv[14] == 'load-dis':
+        req_argn(15)
+        LocaleDB(*sys.argv[1:14]).get_dis().load_disease(sys.argv[15])
+    elif sys.argv[14] == 'load-main':
+        LocaleDB(*sys.argv[1:14]).get_main().load_locales()
+    elif sys.argv[14] == 'load-pop-state':
+        req_argn(15)
+        LocaleDB(*sys.argv[1:14]).get_pop().load_state(sys.argv[15])
+    elif sys.argv[14] == 'load-vax':
         req_argn(14)
-        LocaleDB(*sys.argv[1:13]).get_dis().load_disease(sys.argv[14])
-    elif sys.argv[13] == 'load-main':
-        LocaleDB(*sys.argv[1:13]).get_main().load_locales()
-    elif sys.argv[13] == 'load-pop-state':
-        req_argn(14)
-        LocaleDB(*sys.argv[1:13]).get_pop().load_state(sys.argv[14])
-    elif sys.argv[13] == 'load-vax':
-        req_argn(13)
-        LocaleDB(*sys.argv[1:13]).get_vax().load_vax()
+        LocaleDB(*sys.argv[1:14]).get_vax().load_vax()
+    elif sys.argv[14] == 'load-health':
+        req_argn(15)
+        LocaleDB(*sys.argv[1:14]).get_health().load_health(sys.argv[15])        
     else:
-        print(f'Unknown command: {sys.argv[13]}')
+        print(f'Unknown command: {sys.argv[14]}')
         sys.exit(1)
