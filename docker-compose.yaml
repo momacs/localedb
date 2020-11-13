@@ -15,6 +15,19 @@ services:
       - "5433:5432"
     stop_signal: SIGINT
 
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ${PWD}/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      - ${PWD}/grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml
+      - ${PWD}/grafana/home.json:/usr/share/grafana/public/dashboards/home.json
+      - ${PWD}/grafana/dashboards:/etc/dashboards
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: sa
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+
   localedb:
     image: localedb:0.0.1
     container_name: localedb
@@ -22,40 +35,34 @@ services:
       - .dockerenv
     tty: true
     volumes:
-      - vol_bin:/usr/share/localedb/bin
       - vol_data:/usr/share/localedb/data
       - vol_log:/usr/share/localedb/log
       - vol_schemas:/usr/share/localedb/schemas
-      - $HOME/.localedb/bin/localedb:/usr/local/bin/localedb
+      - ${PWD}/localedb_man.py:/usr/share/localedb/bin/localedb_man.py
+      - ${PWD}/localedb:/usr/local/bin/localedb
 
 volumes:
-  vol_bin:
-    driver: local
-    driver_opts:
-      type: volume
-      device: $HOME/.localedb/bin
-      o: bind
   vol_data:
     driver: local
     driver_opts:
       type: volume
-      device: $HOME/.localedb/data
+      device: ${PWD}/.localedb/data
       o: bind
   vol_log:
     driver: local
     driver_opts:
       type: volume
-      device: $HOME/.localedb/log
+      device: ${PWD}/.localedb/log
       o: bind
   vol_pgdata:
     driver: local
     driver_opts:
       type: volume
-      device: $HOME/.localedb/pg
+      device: ${PWD}/.localedb/pg
       o: bind
   vol_schemas:
     driver: local
     driver_opts:
       type: volume
-      device: $HOME/.localedb/schemas
+      device: ${PWD}/schemas
       o: bind

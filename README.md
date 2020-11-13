@@ -237,6 +237,75 @@ print(db.get_pop_size())
 If the database is not installed on the localhost (or if any other connection parameters need to be adjusted), they should be passed to the `LocaleDB` class' constructor.  Documentation of the package will be published later on.
 
 
+## Docker Usage
+
+LocaleDB may be run without local installation by using Docker. First you should run:
+
+```
+## Build docker container:
+./build-docker.sh
+
+## Start Docker Postgres (may take a minute for postgres to become available):
+docker-compose up -d
+```
+
+This builds the appropriate Docker container and runs it. You should let it run for about a minute to ensure that PostGres is available before running the setup command below:
+
+```
+## Setup database:
+docker-compose run --rm localedb setup
+```
+
+You can verify that LocaleDB is running correctly by loading the vaccination data and viewing it in a Grafana dashboard:
+
+```
+## Load vaccination data:
+docker-compose run --rm localedb load vax
+```
+
+You should now be able to navigate to [`http://localhost:3000/d/D_ICxw2Gk/vax-dashboard?orgId=1`](http://localhost:3000/d/D_ICxw2Gk/vax-dashboard?orgId=1) in your browser and view a vaccination data dashboard.
+
+Next you can run normal LocaleDB commands such as:
+
+```
+## Display info:
+docker-compose run --rm localedb info all
+
+## Load disease data:
+docker-compose run --rm localedb load dis COVID-19
+
+## Load geo data:
+docker-compose run --rm localedb load geo AK
+
+## Load population data:
+docker-compose run --rm localedb load pop AK
+```
+
+You can stop the containers with:
+
+```
+## Stop Docker Postgres:
+docker-compose stop --timeout 300
+docker-compose down --timeout 300
+```
+
+### Development with Docker
+
+Any changes to the docker image require `./build-docker.sh` to be run to update the image.
+
+Run `docker-compose up -d`
+`localedb` and `localedb_man.py` are mounted as volumes. So any changes will take effect immediatly
+
+`docker-compose run --rm localedb info`, edit file locally, run again and new changes will be present.
+
+
+## Grafana
+
+Running LocaleDB with Docker (see prior section) has the added benefit of automatically deploying a [Grafana](https://grafana.com/) instance alongside LocaleDB. Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB. By default, it runs at [`localhost:3000`][localhost:300]. 
+
+To create a new dashboard, create it via the Grafana UI and export it as a `JSON` file. Save this `JSON` file to `grafana/dashboards` and it will be available in future sessions or for additional users if committed to this repository.
+
+
 ## References
 
 ### Data Sources
