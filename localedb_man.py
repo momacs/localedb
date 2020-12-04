@@ -907,14 +907,6 @@ class WeatherSchema(Schema):
         
         return census_fips    
         
-    # Generate timestamp
-    def gen_ts(self, row):
-        mon = row.month
-        noaa_code = row.noaa_code
-        if int(mon)<=9:
-            mon = "0" + str(mon)    
-        return noaa_code[-4:] + '-' + str(mon) + "-" + "28"
-
     # Remove "County" from county name
     def format_county(self, name):
         if "County" in name:
