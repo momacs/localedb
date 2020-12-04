@@ -9,7 +9,7 @@ locale_id  INTEGER NOT NULL,
 year       INTEGER NOT NULL,
 month      INTEGER NOT NULL,
 tmin       DECIMAL,
-tmean      DECIMAL,
+tavg       DECIMAL,
 tmax       DECIMAL,
 precip     DECIMAL
 );

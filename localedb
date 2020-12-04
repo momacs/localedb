@@ -450,8 +450,9 @@ case "$cmd" in
                 $cmd_py load-health $3
                 ;;                
             "weather")
-                req_argn $# 3 "$2 <start year> [force?]"
-                $cmd_py load-weather $3
+                req_argn $# 3 "$2 <start year>"
+                req_argn $# 4 "$2 <stop year>"
+                $cmd_py load-weather $3 $4
                 ;;                                
             "geo")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
@@ -577,6 +578,13 @@ case "$cmd" in
                 echo "        Date range     "$($cmd_psql -t -c "
                     SELECT CONCAT(MIN(START_YEAR), ' - ', MAX(END_YEAR)) FROM $pg_schema_health.health;
                 ")
+                echo "    Weather Data"
+                echo "        Total records  "$($cmd_psql -t -c "
+                    SELECT COUNT(*) FROM $pg_schema_weather.weather;
+                ")
+                echo "        Date range     "$($cmd_psql -t -c "
+                    SELECT CONCAT(MIN(YEAR), ' - ', MAX(YEAR)) FROM $pg_schema_weather.weather;
+                ")                
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)

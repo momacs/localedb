@@ -947,7 +947,7 @@ class WeatherSchema(Schema):
         return df
 
 
-    def process_noaa(self, start_year):
+    def process_noaa(self, start_year, stop_year):
         # Build transform from noaa state fips to census fips
         # NOAA state-level FIPS from NOAA README
         noaa = f"{os.getcwd()}/noaa_states.txt"
@@ -1004,7 +1004,7 @@ class WeatherSchema(Schema):
 
         # Filter to year range user requested:
         base_years = [i for i in range(1895, 2021)]
-        user_years = [i for i in range(int(start_year), 2020 +1)]
+        user_years = [i for i in range(int(start_year), int(stop_year) +1)]
         yr_filter = set(base_years) ^ set(user_years)
         self.yr_filter_str = [str(i) for i in yr_filter]
 
@@ -1048,7 +1048,7 @@ class WeatherSchema(Schema):
             df_ = df.join(noaa_fips.set_index('noaa_fips'), how='left', on='noaa_fips')
             df_['noaa_state_fips'] = df_.noaa_fips.apply(lambda x: x[:2])
             df_ = df_.join(transformer_df, how='left', on='noaa_state_fips')
-            df_['census_county_fips'] = df_.apply(lambda row: census_fip(row), axis=1)
+            df_['census_county_fips'] = df_.apply(lambda row: self.census_fip(row), axis=1)
             
             df_aug.append(df_)
 
@@ -1059,9 +1059,10 @@ class WeatherSchema(Schema):
             df.rename(columns = {'noaa_fips':'noaa_county_fips', 
                                  'census_county_fips': 'fips',
                                  'Tavg': 'tavg',
-                                 'Tmean': 'tmean',
+                                 'Tmax': 'tmax',
                                  'Tmin': 'tmin',
-                                 'precipitation': 'precip'},
+                                 'precipitation': 'precip',
+                                 'county_name': 'county'},
                                  inplace = True) 
             
             df = df.replace(-99.90,np.NaN)
@@ -1072,26 +1073,28 @@ class WeatherSchema(Schema):
         result = pd.concat(df_join, axis=1)
         _, i = np.unique(result.columns, return_index=True)
         res = result.iloc[:, i]
+        res['year'] = res['noaa_code'].apply(lambda x: int(x[-4:]))
         res = res[["year", "month", "fips", "precip", "tavg", "tmin", "tmax"]]
-        res = self.gen_locales(res)
+        res = self.get_locales(res)
         return res
 
 
-    def load_weather(self, start_year):
+    def load_weather(self, start_year, stop_year):
         """
         Loads Flu vaccine data to database.
         Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
         """
+        print(f"Loading NOAA data from {start_year} through {stop_year} (inclusive)")
         self.get_files()
-        weather = self.process_noaa(start_year)
+        weather = self.process_noaa(start_year, stop_year)
         print(weather.head())
         
         try:
-            weather.to_sql('health', con=self.engine, schema=self.dbi.pg_schema_weather, index=False, if_exists='append')
-            print(f"Loaded weather data for {start_year} onward successfully.")
+            weather.to_sql('weather', con=self.engine, schema=self.dbi.pg_schema_weather, index=False, if_exists='append')
+            print(f"Loaded weather data for {start_year} through {stop_year} successfully.")
         except IntegrityError as e:
             assert isinstance(e.orig, UniqueViolation)
-            print(f"Weather data for {start_year} onward is already loaded in LocaleDB.")            
+            print(f"Weather data for {start_year} through {stop_year} is already loaded in LocaleDB.")            
 
     def test(self):
         with self.conn.dbi.cursor() as c:
@@ -1151,8 +1154,8 @@ if __name__ == '__main__':
         req_argn(16)
         LocaleDB(*sys.argv[1:15]).get_health().load_health(sys.argv[16])        
     elif sys.argv[15] == 'load-weather':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_weather().load_weather(sys.argv[16])                
+        req_argn(17)
+        LocaleDB(*sys.argv[1:15]).get_weather().load_weather(sys.argv[16], sys.argv[17])                
     else:
         print(f'Unknown command: {sys.argv[15]}')
         sys.exit(1)
