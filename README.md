@@ -7,7 +7,7 @@ A database of global locales to support modeling and simulation in epidemiology 
 
 As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extentions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The content of the database is accessed via a Python package which provides a high level API to, for example, suggest U.S. counties similar to the county specified.
 
-<center><img height="526" alt="portfolio_view" src="media/design.png" /></center>
+<center><img height="526" alt="portfolio_view" src="https://raw.githubusercontent.com/momacs/localedb/b2dcef901773a61e9a58f55de2dea68b47f68904/media/design.png" /></center>
 
 This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require little to no manual management (periodic updates will be autonomous).  It will then be used for producing data that will drive modeling and simulation efforts.
 
@@ -319,7 +319,7 @@ Run `docker-compose up -d`
 
 ## Grafana
 
-Running LocaleDB with Docker (see prior section) has the added benefit of automatically deploying a [Grafana](https://grafana.com/) instance alongside LocaleDB. Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB. By default, it runs at [`localhost:3000`][localhost:300]. 
+Running LocaleDB with Docker (see prior section) has the added benefit of automatically deploying a [Grafana](https://grafana.com/) instance alongside LocaleDB. Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB. By default, it runs at [`localhost:3000`][localhost:300].
 
 To create a new dashboard, create it via the Grafana UI and export it as a `JSON` file. Save this `JSON` file to `grafana/dashboards` and it will be available in future sessions or for additional users if committed to this repository.
 
