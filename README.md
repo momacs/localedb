@@ -185,6 +185,12 @@ To import health data for the state of Alaska, run:
 $ localedb load health AK
 ```
 
+To import weather data from 2010 to 2020, run:
+
+```
+$ localedb load weather 2010 2020
+```
+
 To import synthetic population data, run:
 
 ```
@@ -288,6 +294,9 @@ docker-compose run --rm localedb load pop AK
 
 ## Load health data:
 docker-compose run --rm localedb load health AK
+
+## Load weather data (provide start and stop years):
+docker-compose run --rm localedb load weather 2010 2020
 ```
 
 You can stop the containers with:

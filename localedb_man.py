@@ -14,6 +14,9 @@ import re
 import sys
 import time
 import urllib.request
+from ftplib import FTP
+import itertools
+import random as rd
 
 from abc         import ABC
 from collections import namedtuple
@@ -42,7 +45,7 @@ class DBI(object):
     """Database interface.
     """
 
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, cursor_factory=psycopg2.extras.NamedTupleCursor):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, cursor_factory=psycopg2.extras.NamedTupleCursor):
         self.pg_host        = pg_host
         self.pg_port        = pg_port
         self.pg_usr         = pg_usr
@@ -54,6 +57,7 @@ class DBI(object):
         self.pg_schema_pop  = pg_schema_pop
         self.pg_schema_vax  = pg_schema_vax
         self.pg_schema_health  = pg_schema_health
+        self.pg_schema_weather  = pg_schema_weather
 
         self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
 
@@ -773,9 +777,327 @@ class HealthSchema(Schema):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+class WeatherSchema(Schema):
+    """The major parameters in this file are sequential climatic county monthly maximum, minimum and average temperature (deg. F. to 10ths) and precipitation (inches to 100ths). Period of record is 1895 through latest month available, updated monthly.
+
+        Values from the most recent two calendar years will be updated on a monthly basis. Period of record updates will occur when the underlying data set undergoes a version change.
+
+        METHODOLOGY:
+
+        County values in nClimDiv were derived from area-weighted averages of grid-point estimates interpolated from station data. A nominal grid resolution of 5 km was used to ensure that all divisions had sufficient spatial sampling (only four small divisions had less than 100 points) and because the impact of elevation on precipitation is minimal below 5 km. Station data were gridded via climatologically aided interpolation to minimize biases from topographic and network variability.
+
+        The Global Historical Climatology Network (GHCN) Daily dataset is the source of station data for nClimDiv. GHCN-Daily contains several major observing networks in North America, five of which are used here. The primary network is the National Weather Service (NWS) Cooperative Observing (COOP) program, which consists of stations operated by volunteers as well as by agencies such as the Federal Aviation Administration.
+
+        Data is updated monthly.
+    """
+
+    def countdown(self, t):
+        while t: 
+            mins, secs = divmod(t, 60) 
+            timer = '{:02d}:{:02d}'.format(mins, secs) 
+            print("Retry in: " + timer + " seconds", end="\r") 
+            time.sleep(1) 
+            t -= 1
+
+    def download_noaa(self, max_tries, min_delay, max_delay):
+        i = 1
+        while i <= max_tries:
+            
+            try:
+                # Download (TO WRKDIR) 4 county weather files from NOAA ftp
+                ftp = FTP('ftp.ncdc.noaa.gov') # ftp access to ncdc.noaa.gov
+                ftp.login()                     # anonymous ftp login
+                ftp.cwd('pub/data/cirs/climdiv') # change directory
+      
+                # Get all the files on the ftp page and Filter to only the 4 county files
+                dirs = ftp.nlst() 
+                description_files = [i for i in dirs if len(i.split('.'))>1]
+
+                #Delete any partial downloads
+                for file in description_files:
+                    if os.path.exists(file):
+                        os.remove(file)
+                        print(f"Deleted {file}")
+                
+                files_to_download = []
+                for file in description_files:
+
+                    if "climdiv-pcpncy" in file or "climdiv-tmaxcy" in file or "climdiv-tmincy"in file or "climdiv-tmpccy" in file:
+                        files_to_download.append(file)
+                
+                for file in files_to_download:  
+                    if os.path.isfile(file):
+                        print('Already downloaded file: '+ file)
+                        continue
+      
+                    with open(file, 'wb') as fp:
+                        print(f'Downloading: {file.split("/")[-1]}')
+                        ftp.retrbinary('RETR ' + file, fp.write)
+            
+                i = 11  
+                print("\n")        
+                print(f"Complete. Files downloaded to: {os.getcwd()}") 
+                
+            except Exception as e:
+                print(f'Exception: {e}')
+                if i <= max_tries:
+                    
+                    sleep_time = rd.randint(min_delay, max_delay)
+                    self.countdown(sleep_time)
+                    
+                    continue
+                    
+                else:
+                    print(f'Exceeded {max_tries} max download attempts')
+                    break
+            i += 1  
+        return files_to_download
+
+    def year_filter(self,df, yr_filter_str):
+
+        df['year'] = df.noaa_code.apply(lambda x: x[-4:])
+        df = df[~df["year"].str.contains('|'.join(yr_filter_str))]
+        df = df.reset_index(drop=True)
+        
+        del df['year']
+        
+        return df
+
+    # readin NOAA data and apply year filter
+    def read_filter_data(self, file):
+        
+        fn = file.split("/")[-1]
+        print(f'Reading:    {fn}')
+
+        names = ['noaa_code',1,2,3,4,5,6,7,8,9,10,11,12] 
+        df = pd.read_csv(file, delim_whitespace=True, 
+                         converters={'noaa_code': lambda x: str(x)},
+                         engine='python',
+                         names=names, 
+                         header=None)
+
+        # Filter by selected years:
+        print(f"Filtering:  {fn}")
+        df = self.year_filter(df, self.yr_filter_str)
+        
+        return df
+
+    # pivot wx data from column to row
+    def restack_df(self, df,fn):
+        
+        if fn == "01":
+            wx = "precipitation"
+        if fn == "02":
+            wx = "Tavg"        
+        if fn == "27":
+            wx = "Tmax"        
+        if fn == "28":
+            wx = "Tmin"
+        
+        df = pd.DataFrame(df.set_index('noaa_code')\
+                          .stack())\
+                          .reset_index()\
+                          .rename(columns={'level_1': 'month', 0: wx})
+        return df
+
+    # Build full census FIPS to add to df    
+    def census_fip(self, row):
+        county_fip = row.noaa_fips[-3:]
+        census_fips = row.census_state_fips + county_fip
+        
+        return census_fips    
+        
+    # Remove "County" from county name
+    def format_county(self, name):
+        if "County" in name:
+            name = name.replace("County", "").strip()
+        return name
+
+    # To avoid 4 columns of noaa_codes, replace the wx-type with "wx"
+    def replace_it(self, x):
+        temp = x[5:7]
+        x = x.replace(temp,"wx")
+        return x        
+
+    def get_files(self):
+        """
+        Gets FIPS lookup data
+        """
+        print("Downloading FIPS lookups")
+        urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/noaa_fips.txt', 'noaa_fips.txt')
+        urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/noaa_states.txt', 'noaa_states.txt')
+        urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/state_fips.txt', 'state_fips.txt')        
+        print("Downloading NOAA data")
+        files_to_download = self.download_noaa(5, 30, 60)
+
+
+    def get_locales(self, df):
+        locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
+        df = df.join(locale_df.set_index('fips'), how='inner', on='fips')
+        df = df.rename(columns = {'id': 'locale_id'})
+        del(df['fips'])
+        return df
+
+
+    def process_noaa(self, start_year, stop_year):
+        # Build transform from noaa state fips to census fips
+        # NOAA state-level FIPS from NOAA README
+        noaa = f"{os.getcwd()}/noaa_states.txt"
+        noaa_conv = pd.read_csv(noaa, sep=",", converters={'code_noaa': lambda x: str(x)},engine='python')
+
+        # Census state-level FIPS 
+        state_fips = f"{os.getcwd()}/state_fips.txt"
+        census_conv = pd.read_csv(state_fips, sep="\t", converters={'code': lambda x: str(x)}, engine='python')
+
+        # No need for full state name; will use abbreviations
+        del census_conv["Name"]
+
+        # NOAA county-level FIPS with name
+        noaa_fn = f"{os.getcwd()}/noaa_fips.txt"
+        noaa_fips= pd.read_csv(noaa_fn, sep="\t", converters={'noaa_fips': lambda x: str(x)},engine='python')
+
+        # Build lists to map NOAA to census state codes
+        fips_rs = pd.concat([noaa_conv, census_conv], axis=1)
+        noaa_code = list(fips_rs["code_noaa"])
+        noaa_state = list(fips_rs["state_noaa"])
+        census_state = list(fips_rs["state"])
+        census_code = list(fips_rs["code"])
+
+        # build dict to map census state FIPS to NOAA state fips
+        trans = {}
+        for i in range(len(census_state)):
+            state = census_state[i]
+            fips = census_code[i]
+            trans[state] = [fips]
+            
+        for temp_st in trans.keys():
+            for i in range(len(noaa_state)):
+                temp_noaa_st = noaa_state[i]
+                
+                if temp_st == temp_noaa_st:
+                    trans[temp_st].append(noaa_code[i])  
+
+        # Delete census keys that do not have data in the NOAA data            
+        del_keys = []            
+        for temp_st in trans.keys():            
+            if len(trans[temp_st]) == 1:
+                   del_keys.append(temp_st)
+        [trans.pop(key) for key in del_keys]
+
+        #remove state abbrev as key: noaa state fips = key
+        transformer = {}
+
+        for key in trans.keys():
+            census = trans[key][0]
+            noaa = trans[key][1]
+            state_abbr = key
+            transformer[noaa] = [census, state_abbr]
+
+
+        # Filter to year range user requested:
+        base_years = [i for i in range(1895, 2021)]
+        user_years = [i for i in range(int(start_year), int(stop_year) +1)]
+        yr_filter = set(base_years) ^ set(user_years)
+        self.yr_filter_str = [str(i) for i in yr_filter]
+
+
+        # Back-up if ftp site fails; must have these files already in the directory
+        files_to_download=["climdiv-pcpncy-v1.0.0-20201104", 
+                           "climdiv-tmaxcy-v1.0.0-20201104", 
+                           "climdiv-tmincy-v1.0.0-20201104", 
+                           "climdiv-tmpccy-v1.0.0-20201104"]
+
+        starter = f"{os.getcwd()}/"
+        files = [starter + file for file in files_to_download]
+
+        # Read in and filter NOAA data
+        df_list = []
+        for file in files:
+            
+            df_list.append(self.read_filter_data(file))
+            
+        # restack wx data column-to-row 
+        df_stack = []
+        for df in df_list:
+
+            fn = df.noaa_code.iloc[0][5:7]
+
+            df_ = self.restack_df(df,fn)
+            
+            df_ = df_[~df_['noaa_code'].astype(str).str.startswith('50')]
+            
+            df_['noaa_fips'] = df_.noaa_code.apply(lambda x: x[:5])
+            
+            df_stack.append(df_)
+
+        # Convert NOAA to Census FIPS
+        transformer_df = pd.DataFrame.from_dict(transformer).transpose().rename(columns = {0:'census_state_fips', 1: 'state'})
+        noaa_fips['county_name'] = noaa_fips['county_name'].apply(lambda x: self.format_county(x))
+
+        df_aug = []
+        for df in df_stack:
+            
+            df_ = df.join(noaa_fips.set_index('noaa_fips'), how='left', on='noaa_fips')
+            df_['noaa_state_fips'] = df_.noaa_fips.apply(lambda x: x[:2])
+            df_ = df_.join(transformer_df, how='left', on='noaa_state_fips')
+            df_['census_county_fips'] = df_.apply(lambda row: self.census_fip(row), axis=1)
+            
+            df_aug.append(df_)
+
+        df_join = []
+        for df in df_aug:
+            del df["census_state_fips"]
+            del df["noaa_state_fips"]
+            df.rename(columns = {'noaa_fips':'noaa_county_fips', 
+                                 'census_county_fips': 'fips',
+                                 'Tavg': 'tavg',
+                                 'Tmax': 'tmax',
+                                 'Tmin': 'tmin',
+                                 'precipitation': 'precip',
+                                 'county_name': 'county'},
+                                 inplace = True) 
+            
+            df = df.replace(-99.90,np.NaN)
+            df = df.replace(-9.99,np.NaN)
+            
+            df_join.append(df)
+
+        result = pd.concat(df_join, axis=1)
+        _, i = np.unique(result.columns, return_index=True)
+        res = result.iloc[:, i]
+        res['year'] = res['noaa_code'].apply(lambda x: int(x[-4:]))
+        res = res[["year", "month", "fips", "precip", "tavg", "tmin", "tmax"]]
+        res = self.get_locales(res)
+        return res
+
+
+    def load_weather(self, start_year, stop_year):
+        """
+        Loads Flu vaccine data to database.
+        Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
+        """
+        print(f"Loading NOAA data from {start_year} through {stop_year} (inclusive)")
+        self.get_files()
+        weather = self.process_noaa(start_year, stop_year)
+        print(weather.head())
+        
+        try:
+            weather.to_sql('weather', con=self.engine, schema=self.dbi.pg_schema_weather, index=False, if_exists='append')
+            print(f"Loaded weather data for {start_year} through {stop_year} successfully.")
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print(f"Weather data for {start_year} through {stop_year} is already loaded in LocaleDB.")            
+
+    def test(self):
+        with self.conn.dbi.cursor() as c:
+            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_weather}.weather;')
+            print(c.fetchone().n)            
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, dpath_log, dpath_rt):
-        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health)
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, dpath_log, dpath_rt):
+        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather)
         self.fsi = FSI(dpath_log, dpath_rt)
         self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
 
@@ -794,6 +1116,9 @@ class LocaleDB(object):
     def get_health(self):
         return HealthSchema(self.dbi, self.fsi, self.engine)        
 
+    def get_weather(self):
+        return WeatherSchema(self.dbi, self.fsi, self.engine)                
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -801,24 +1126,28 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    if len(sys.argv[1:]) < 14:
-        print(f'Incorrect number of arguments; at least 13 are required.')
+    if len(sys.argv[1:]) < 15:
+        print(f'Incorrect number of arguments; at least 15 are required.')
         sys.exit(1)
 
-    if sys.argv[14] == 'load-dis':
+    if sys.argv[15] == 'load-dis':
+        req_argn(16)
+        LocaleDB(*sys.argv[1:15]).get_dis().load_disease(sys.argv[16])
+    elif sys.argv[15] == 'load-main':
+        print(*sys.argv)
+        LocaleDB(*sys.argv[1:15]).get_main().load_locales()
+    elif sys.argv[15] == 'load-pop-state':
+        req_argn(16)
+        LocaleDB(*sys.argv[1:15]).get_pop().load_state(sys.argv[16])
+    elif sys.argv[15] == 'load-vax':
         req_argn(15)
-        LocaleDB(*sys.argv[1:14]).get_dis().load_disease(sys.argv[15])
-    elif sys.argv[14] == 'load-main':
-        LocaleDB(*sys.argv[1:14]).get_main().load_locales()
-    elif sys.argv[14] == 'load-pop-state':
-        req_argn(15)
-        LocaleDB(*sys.argv[1:14]).get_pop().load_state(sys.argv[15])
-    elif sys.argv[14] == 'load-vax':
-        req_argn(14)
-        LocaleDB(*sys.argv[1:14]).get_vax().load_vax()
-    elif sys.argv[14] == 'load-health':
-        req_argn(15)
-        LocaleDB(*sys.argv[1:14]).get_health().load_health(sys.argv[15])        
+        LocaleDB(*sys.argv[1:15]).get_vax().load_vax()
+    elif sys.argv[15] == 'load-health':
+        req_argn(16)
+        LocaleDB(*sys.argv[1:15]).get_health().load_health(sys.argv[16])        
+    elif sys.argv[15] == 'load-weather':
+        req_argn(17)
+        LocaleDB(*sys.argv[1:15]).get_weather().load_weather(sys.argv[16], sys.argv[17])                
     else:
-        print(f'Unknown command: {sys.argv[14]}')
+        print(f'Unknown command: {sys.argv[15]}')
         sys.exit(1)
