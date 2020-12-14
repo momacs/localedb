@@ -19,7 +19,7 @@ number_of_trips_25_50   	   INTEGER,
 number_of_trips_50_100  	   INTEGER,
 number_of_trips_100_250 	   INTEGER,
 number_of_trips_250_500 	   INTEGER,
-number_of_trips_gte_500 	   INTEGER,
+number_of_trips_gte_500 	   INTEGER
 );
 
 COMMIT;

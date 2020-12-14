@@ -33,6 +33,7 @@ declare -r pg_schema_pop=pop
 declare -r pg_schema_vax=vax
 declare -r pg_schema_health=health
 declare -r pg_schema_weather=weather
+declare -r pg_schema_mobility=mobility
 declare -r pg_db=localedb
 declare -r pg_usr=postgres
 declare -r pg_pwd=sa
@@ -46,6 +47,7 @@ declare -r dir_data_pop=$dir_root/data/pop
 declare -r dir_data_vax=$dir_root/data/vax
 declare -r dir_data_health=$dir_root/data/health
 declare -r dir_data_weather=$dir_root/data/weather
+declare -r dir_data_mobility=$dir_root/data/mobility
 declare -r dir_bin=$dir_root/bin
 declare -r dir_log=$dir_root/log
 declare -r dir_rt=$dir_root/rt
@@ -62,7 +64,7 @@ declare -r cmd_dropdb="dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg
 declare -r cmd_createdb="createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
 declare -r cmd_pg_isready="pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
 declare -r cmd_psql="psql $pg_conn_str -q"
-declare -r cmd_py="python3 $dir_bin/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $pg_schema_health $pg_schema_weather $dir_log $dir_rt"
+declare -r cmd_py="python3 $dir_bin/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $pg_schema_health $pg_schema_weather $pg_schema_mobility $dir_log $dir_rt"
 declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
 
 [ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
@@ -90,6 +92,7 @@ declare -r sql_schema_pop="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_POP=${pg
 declare -r sql_schema_vax="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_VAX=${pg_schema_vax} envsubst < ${dir_schemas}/${pg_schema_vax}.schema)"
 declare -r sql_schema_health="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_HEALTH=${pg_schema_health} envsubst < ${dir_schemas}/${pg_schema_health}.schema)"
 declare -r sql_schema_weather="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_WEATHER=${pg_schema_weather} envsubst < ${dir_schemas}/${pg_schema_weather}.schema)"
+declare -r sql_schema_mobility="$(PG_SCHEMA_MAIN=${pg_schema_main} PG_SCHEMA_MOBILITY=${pg_schema_mobility} envsubst < ${dir_schemas}/${pg_schema_mobility}.schema)"
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -123,6 +126,7 @@ db_init() {
     $cmd_psql -c "$sql_schema_vax"  > $out #2>&1
     $cmd_psql -c "$sql_schema_health"  > $out #2>&1
     $cmd_psql -c "$sql_schema_weather"  > $out #2>&1
+    $cmd_psql -c "$sql_schema_mobility"  > $out #2>&1
     $cmd_psql -c "VACUUM FULL;"
     echo " done"
 
@@ -454,6 +458,10 @@ case "$cmd" in
                 req_argn $# 4 "$2 <stop year>"
                 $cmd_py load-weather $3 $4
                 ;;                                
+            "mobility")
+                req_argn $# 3 "$2 <state or - for all> [force?]"
+                $cmd_py load-mobility $3
+                ;;                
             "geo")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
                 req_state_name $3
@@ -584,7 +592,17 @@ case "$cmd" in
                 ")
                 echo "        Date range     "$($cmd_psql -t -c "
                     SELECT CONCAT(MIN(YEAR), ' - ', MAX(YEAR)) FROM $pg_schema_weather.weather;
-                ")                
+                ")
+                echo "    Mobility Data"
+                echo "        Total records  "$($cmd_psql -t -c "
+                    SELECT COUNT(*) FROM $pg_schema_mobility.mobility;
+                ")
+                echo "        Date range     "$($cmd_psql -t -c "
+                    SELECT CONCAT(MIN(TIMESTAMP), ' - ', MAX(TIMESTAMP)) FROM $pg_schema_mobility.mobility;
+                ")
+                echo "        Avg. daily percent of population leaving the home  "$($cmd_psql -t -c "
+                    SELECT CONCAT(CAST(ROUND(AVG(population_not_staying_at_home)/(AVG(population_staying_at_home)+AVG(population_not_staying_at_home)),2)*100 AS INT), '%') FROM $pg_schema_mobility.mobility;
+                ")                                                                
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)
@@ -629,6 +647,7 @@ case "$cmd" in
         mkdir -p $dir_data_vax
         mkdir -p $dir_data_health
         mkdir -p $dir_data_weather
+        mkdir -p $dir_data_mobility
         mkdir -p $dir_bin
         mkdir -p $dir_log
         mkdir -p $dir_rt

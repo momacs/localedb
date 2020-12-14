@@ -45,7 +45,7 @@ class DBI(object):
     """Database interface.
     """
 
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, cursor_factory=psycopg2.extras.NamedTupleCursor):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, cursor_factory=psycopg2.extras.NamedTupleCursor):
         self.pg_host        = pg_host
         self.pg_port        = pg_port
         self.pg_usr         = pg_usr
@@ -58,6 +58,7 @@ class DBI(object):
         self.pg_schema_vax  = pg_schema_vax
         self.pg_schema_health  = pg_schema_health
         self.pg_schema_weather  = pg_schema_weather
+        self.pg_schema_mobility  = pg_schema_mobility
 
         self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
 
@@ -1093,11 +1094,127 @@ class WeatherSchema(Schema):
             c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_weather}.weather;')
             print(c.fetchone().n)            
 
+# ----------------------------------------------------------------------------------------------------------------------
+class MobilitySchema(Schema):
+    """County mobility data is available here: https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD
+
+    Data mirror: https://world-modelers.s3.amazonaws.com/data/Trips_by_Distance.csv 
+    (will become stale)
+    """
+
+
+    def add_zero(self, x):
+        # For FIPS sans leading zero
+        if len(x)<5:
+            return "0" + x
+        else:
+            return x   
+
+    def get_locales(self, df):
+        locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
+        df = df.join(locale_df.set_index('fips'), how='inner', on='fips')
+        df = df.rename(columns = {'id': 'locale_id'})
+        del(df['fips'])
+        return df
+
+
+    def stamper(self, x):
+        temp = x.split("/")
+
+        y = temp[0]
+        m = temp[1]
+        d = temp[2]
+        
+        return f'{y}-{m}-{d}'
+
+    def process_mobility(self, state):
+        # Read in data...new version of csv
+        trips_fn = 'Trips_by_Distance.csv'
+        #wrkdir = os.getcwd()
+
+        df_full = pd.read_csv(trips_fn, sep=",", 
+                              converters={'County FIPS': lambda x: self.add_zero(str(x))},engine='python')
+
+        df_full = df_full[df_full["Level"] == "County"]
+
+                # Add timestamp
+        df = df_full.copy()
+        df["Timestamp"] = df.Date.apply(lambda x: self.stamper(x))
+
+        # Delete unneeded columns
+        delete_me = ["Level", "Date", "State FIPS"]
+        for me in delete_me:
+            del df[me]
+            
+        # Rename column
+        df.rename(columns={"State Postal Code": "State"}, inplace=True)
+
+        # Filter by State
+        if state != '-':
+            df = df[df['State'] == state]
+
+        # Drop "County" from County Name
+        df["County Name"]=  df["County Name"].apply(lambda x: str(x).replace("County", "").strip())
+
+        # Reorder columns
+        new_cols = ['Timestamp', 'County Name', 'State', 'County FIPS','Population Staying at Home',
+                'Population Not Staying at Home', 'Number of Trips',
+                'Number of Trips <1', 'Number of Trips 1-3', 'Number of Trips 3-5',
+                'Number of Trips 5-10', 'Number of Trips 10-25',
+                'Number of Trips 25-50', 'Number of Trips 50-100',
+                'Number of Trips 100-250', 'Number of Trips 250-500',
+                'Number of Trips >=500']
+        df = df[new_cols]
+
+        # Delete rows without data
+        df = df.dropna()
+
+        # Convert people to integers
+        cols = list(df.columns[4:])
+        for col in cols:
+            df[col]= df[col].astype(int) 
+
+        renamed_cols = ['timestamp', 'fips','population_staying_at_home',
+                    'population_not_staying_at_home', 'number_of_trips',
+                    'number_of_trips_lt_1', 'number_of_trips_1_3', 'number_of_trips_3_5',
+                    'number_of_trips_5_10', 'number_of_trips_10_25',
+                    'number_of_trips_25_50', 'number_of_trips_50_100',
+                    'number_of_trips_100_250', 'number_of_trips_250_500',
+                    'number_of_trips_gte_500']       
+
+        del(df['County Name'])
+        del(df['State'])
+        df.columns = renamed_cols
+        df = self.get_locales(df)
+        return df       
+
+    def load_mobility(self, state):
+        """
+        Loads Flu vaccine data to database.
+        Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
+        """
+        print("\nDownloading mobility data...")
+        download_url = 'https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD'
+        urllib.request.urlretrieve(download_url, 'Trips_by_Distance.csv')
+        print("...download complete!\nProcessing data...")
+        mobility = self.process_mobility(state)
+        print("...data processing complete!\nSample:\n")
+        print(mobility.head())
+        try:
+            mobility.to_sql('mobility', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print("Mobility data is already loaded in LocaleDB.")
+
+    def test(self):
+        with self.conn.dbi.cursor() as c:
+            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_mobility}.mobility;')
+            print(c.fetchone().n)
 
 # ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, dpath_log, dpath_rt):
-        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather)
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, dpath_log, dpath_rt):
+        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility)
         self.fsi = FSI(dpath_log, dpath_rt)
         self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
 
@@ -1117,8 +1234,10 @@ class LocaleDB(object):
         return HealthSchema(self.dbi, self.fsi, self.engine)        
 
     def get_weather(self):
-        return WeatherSchema(self.dbi, self.fsi, self.engine)                
+        return WeatherSchema(self.dbi, self.fsi, self.engine)              
 
+    def get_mobility(self):
+        return MobilitySchema(self.dbi, self.fsi, self.engine)                        
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -1126,28 +1245,33 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    if len(sys.argv[1:]) < 15:
-        print(f'Incorrect number of arguments; at least 15 are required.')
-        sys.exit(1)
+    min_arg_length = 16
 
-    if sys.argv[15] == 'load-dis':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_dis().load_disease(sys.argv[16])
-    elif sys.argv[15] == 'load-main':
+    if len(sys.argv[1:]) < min_arg_length:
+        print(f'Incorrect number of arguments; at least ${min_arg_length} are required.')
+        sys.exit(1)    
+
+    if sys.argv[min_arg_length] == 'load-dis':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_dis().load_disease(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-main':
         print(*sys.argv)
-        LocaleDB(*sys.argv[1:15]).get_main().load_locales()
-    elif sys.argv[15] == 'load-pop-state':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_pop().load_state(sys.argv[16])
-    elif sys.argv[15] == 'load-vax':
-        req_argn(15)
-        LocaleDB(*sys.argv[1:15]).get_vax().load_vax()
-    elif sys.argv[15] == 'load-health':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_health().load_health(sys.argv[16])        
-    elif sys.argv[15] == 'load-weather':
-        req_argn(17)
-        LocaleDB(*sys.argv[1:15]).get_weather().load_weather(sys.argv[16], sys.argv[17])                
+        LocaleDB(*sys.argv[1:min_arg_length]).get_main().load_locales()
+    elif sys.argv[min_arg_length] == 'load-pop-state':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_pop().load_state(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-vax':
+        req_argn(min_arg_length)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_vax().load_vax()
+    elif sys.argv[min_arg_length] == 'load-health':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_health().load_health(sys.argv[min_arg_length+1])        
+    elif sys.argv[min_arg_length] == 'load-weather':
+        req_argn(min_arg_length+2)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_weather().load_weather(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])                
+    elif sys.argv[min_arg_length] == 'load-mobility':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_mobility(sys.argv[min_arg_length+1])
     else:
-        print(f'Unknown command: {sys.argv[15]}')
+        print(f'Unknown command: {sys.argv[min_arg_length]}')
         sys.exit(1)
