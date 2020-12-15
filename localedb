@@ -598,10 +598,10 @@ case "$cmd" in
                     SELECT COUNT(*) FROM $pg_schema_mobility.mobility;
                 ")
                 echo "        Date range     "$($cmd_psql -t -c "
-                    SELECT CONCAT(MIN(TIMESTAMP), ' - ', MAX(TIMESTAMP)) FROM $pg_schema_mobility.mobility;
+                    SELECT CONCAT(MIN(TS), ' - ', MAX(TS)) FROM $pg_schema_mobility.mobility;
                 ")
                 echo "        Avg. daily percent of population leaving the home  "$($cmd_psql -t -c "
-                    SELECT CONCAT(CAST(ROUND(AVG(population_not_staying_at_home)/(AVG(population_staying_at_home)+AVG(population_not_staying_at_home)),2)*100 AS INT), '%') FROM $pg_schema_mobility.mobility;
+                    SELECT CONCAT(CAST(ROUND(AVG(pop_mobile)/(AVG(pop_home)+AVG(pop_mobile)),2)*100 AS INT), '%') FROM $pg_schema_mobility.mobility;
                 ")                                                                
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)

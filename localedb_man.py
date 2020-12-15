@@ -1174,13 +1174,13 @@ class MobilitySchema(Schema):
         for col in cols:
             df[col]= df[col].astype(int) 
 
-        renamed_cols = ['timestamp', 'fips','population_staying_at_home',
-                    'population_not_staying_at_home', 'number_of_trips',
-                    'number_of_trips_lt_1', 'number_of_trips_1_3', 'number_of_trips_3_5',
-                    'number_of_trips_5_10', 'number_of_trips_10_25',
-                    'number_of_trips_25_50', 'number_of_trips_50_100',
-                    'number_of_trips_100_250', 'number_of_trips_250_500',
-                    'number_of_trips_gte_500']       
+        renamed_cols = ['ts', 'fips','pop_home',
+                    'pop_mobile', 'n_trips',
+                    'n_trips_lt_1', 'n_trips_1_3', 'n_trips_3_5',
+                    'n_trips_5_10', 'n_trips_10_25',
+                    'n_trips_25_50', 'n_trips_50_100',
+                    'n_trips_100_250', 'n_trips_250_500',
+                    'n_trips_gte_500']       
 
         del(df['County Name'])
         del(df['State'])
