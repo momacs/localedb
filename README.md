@@ -22,7 +22,7 @@ As depicted on the figure above, the current projection is for LocaleDB to conta
 - **Medical countermeasures** (**MCMs**; e.g., vaccine availability, efficacy, and allocation strategies)
 - **Population** (e.g., households, their incomes, age of people, etc.)
 - **Geographic and cartographic** (e.g., area of land, population density)
--​**Mobility** (mobile-phone based)
+-​ **Mobility** (mobile-phone based): measures of the number of trips individuals take
 - **Health factors and outcomes** (e.g., diet, exercise, access to care, etc.)
 - **Local events** (e.g., dates and sizes of mass protests)
 - **Meteorological**
@@ -297,6 +297,9 @@ docker-compose run --rm localedb load health AK
 
 ## Load weather data (provide start and stop years):
 docker-compose run --rm localedb load weather 2010 2020
+
+## Load mobility data for AK:
+docker-compose run --rm localedb load mobility AK
 ```
 
 You can stop the containers with:

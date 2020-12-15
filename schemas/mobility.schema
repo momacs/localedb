@@ -1,0 +1,25 @@
+SET client_min_messages TO WARNING;
+BEGIN;
+
+DROP SCHEMA IF EXISTS $PG_SCHEMA CASCADE;
+CREATE SCHEMA $PG_SCHEMA_MOBILITY;
+
+CREATE TABLE $PG_SCHEMA_MOBILITY.mobility (
+locale_id  			   INTEGER NOT NULL,
+ts  				   TIMESTAMP NOT NULL,
+pop_home     		   INTEGER,
+pop_mobile 			   INTEGER,
+n_trips 	    	   INTEGER,
+n_trips_lt_1    	   INTEGER,
+n_trips_1_3     	   INTEGER,
+n_trips_3_5     	   INTEGER,
+n_trips_5_10    	   INTEGER,
+n_trips_10_25   	   INTEGER,
+n_trips_25_50   	   INTEGER,
+n_trips_50_100  	   INTEGER,
+n_trips_100_250 	   INTEGER,
+n_trips_250_500 	   INTEGER,
+n_trips_gte_500 	   INTEGER
+);
+
+COMMIT;
