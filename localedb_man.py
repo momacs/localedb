@@ -26,6 +26,9 @@ from sqlalchemy  import create_engine
 from psycopg2.errors import UniqueViolation
 from sqlalchemy.exc  import IntegrityError
 
+sys.path.append('/usr/share/localedb/scripts')
+import airtraffic
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 def req_argn(n):
@@ -1206,6 +1209,18 @@ class MobilitySchema(Schema):
             assert isinstance(e.orig, UniqueViolation)
             print("Mobility data is already loaded in LocaleDB.")
 
+
+    def load_airtraffic(self,year, state, min_pax):
+        print(f"Loading air traffic data for {year} for {state} filtering for {min_pax} minimum passengers per flight...")
+        df = airtraffic.airtraffic(year, state, int(min_pax))
+        print(df.head())
+        try:
+            df.to_sql('airtraffic', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print("Airtraffic data is already loaded in LocaleDB.")
+
+
     def test(self):
         with self.conn.dbi.cursor() as c:
             c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_mobility}.mobility;')
@@ -1272,6 +1287,9 @@ if __name__ == '__main__':
     elif sys.argv[min_arg_length] == 'load-mobility':
         req_argn(min_arg_length+1)
         LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_mobility(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-airtraffic':
+        req_argn(min_arg_length+3)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_airtraffic(sys.argv[min_arg_length+1],sys.argv[min_arg_length+2],sys.argv[min_arg_length+3])
     else:
         print(f'Unknown command: {sys.argv[min_arg_length]}')
         sys.exit(1)

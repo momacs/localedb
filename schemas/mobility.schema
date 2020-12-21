@@ -22,14 +22,18 @@ n_trips_250_500 	   INTEGER,
 n_trips_gte_500 	   INTEGER
 );
 
-CREATE TABLE $PG_SCHEMA_MOBILITY.airtravel (
+CREATE TABLE $PG_SCHEMA_MOBILITY.airtraffic (
 ts  				   TIMESTAMP NOT NULL,
 origin_code   		   TEXT,
 origin_city   		   TEXT,
-origin_locale_id	   INTEGER NOT NULL,
+origin_admin0		   TEXT,
+origin_admin1		   TEXT,
+origin_fips			   TEXT,
 dest_code   		   TEXT,
 dest_city   		   TEXT,
-dest_locale_id		   INTEGER NOT NULL,
+dest_admin0		   	   TEXT,
+dest_admin1		   	   TEXT,
+dest_fips			   TEXT,
 distance	   		   INTEGER NOT NULL,
 passengers	   		   INTEGER NOT NULL
 );

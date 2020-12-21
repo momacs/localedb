@@ -1,9 +1,11 @@
 # ALL IMPORTS
 import os
+import sys
 import pandas as pd
 import glob
 import json
 import requests
+import time
 import numpy as np
 import urllib.request
 from zipfile import ZipFile as zp
@@ -116,7 +118,7 @@ def cleanup(wrkdir, files):
         os.remove(o)
 
 
-def airtraffic(year, min_pax):
+def airtraffic(year, state, min_pax):
     wrkdir = os.getcwd()
     download_lookups(wrkdir)
     headers = {
@@ -151,9 +153,20 @@ def airtraffic(year, min_pax):
         zip_file = url.split("/")[-1].split(".")[0]
         files_to_unzip.append(zip_file)
 
-        remote = urllib.request.urlopen(url)
-        data = remote.read()
-        remote.close()
+        downloaded = False
+        tries = 0
+        while not downloaded:
+            try:
+                remote = urllib.request.urlopen(url)
+                data = remote.read()
+                remote.close()
+                downloaded = True
+            except:
+                print("WARNING: failed to download air traffic data. Retrying...") 
+                tries += 1
+                time.sleep(60)
+            if tries == 2:
+                sys.exit("ERROR: failed to download air traffic data from BTS.gov. Please try again later.")
 
         local = open(zip_file, "wb")
         local.write(data)
@@ -435,20 +448,14 @@ def airtraffic(year, min_pax):
         "timestamp",
         "origin_airport_code",
         "origin_city",
-        "origin_state_abr",
-        "origin_admin2",
         "origin_fips",
         "origin_admin1",
         "origin_admin0",
-        "origin_iso2",
         "dest_airport_code",
         "dest_city",
-        "dest_state_abr",
-        "dest_admin2",
         "dest_fips",
         "dest_admin1",
         "dest_admin0",
-        "dest_iso2",
         "distance",
         "passengers",
         "month",
@@ -471,8 +478,11 @@ def airtraffic(year, min_pax):
 
     df_agg = df_agg.sort_values("month").reset_index(drop=True)
 
-    # Write to CSV
-    del df_agg["month"]
+    if state != '-':
+        df_agg = df_agg[df_agg['dest_state_abr']==state]
+
+    df_agg = df_agg[keepers]
+    del df_agg['month']
 
     df_agg = df_agg.rename(
         columns={

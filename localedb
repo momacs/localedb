@@ -461,7 +461,13 @@ case "$cmd" in
             "mobility")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
                 $cmd_py load-mobility $3
-                ;;                
+                ;;
+            "airtraffic")
+                req_argn $# 3 "$2 <year>"
+                req_argn $# 4 "$2 <state or - for all> [force?]"
+                req_argn $# 5 "$2 <minimum passengers per flight>"
+                $cmd_py load-airtraffic $3 $4 $5
+                ;;                                
             "geo")
                 req_argn $# 3 "$2 <state or - for all> [force?]"
                 req_state_name $3
@@ -602,7 +608,14 @@ case "$cmd" in
                 ")
                 echo "        Avg. daily percent of population leaving the home  "$($cmd_psql -t -c "
                     SELECT CONCAT(CAST(ROUND(AVG(pop_mobile)/(AVG(pop_home)+AVG(pop_mobile)),2)*100 AS INT), '%') FROM $pg_schema_mobility.mobility;
-                ")                                                                
+                ")
+                echo "    Air traffic Data"
+                echo "        Total records  "$($cmd_psql -t -c "
+                    SELECT COUNT(*) FROM $pg_schema_mobility.airtraffic;
+                ")
+                echo "        Date range     "$($cmd_psql -t -c "
+                    SELECT CONCAT(MIN(TS), ' - ', MAX(TS)) FROM $pg_schema_mobility.airtraffic;
+                ")                                                                                
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)
