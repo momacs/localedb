@@ -22,18 +22,21 @@ n_trips_250_500 	   INTEGER,
 n_trips_gte_500 	   INTEGER
 );
 
-CREATE TABLE $PG_SCHEMA_MOBILITY.airtraffic (
+CREATE UNLOGGED TABLE $PG_SCHEMA_MOBILITY.airtraffic (
+id 				       SERIAL PRIMARY KEY,
 ts  				   TIMESTAMP NOT NULL,
 origin_code   		   TEXT,
 origin_city   		   TEXT,
 origin_admin0		   TEXT,
 origin_admin1		   TEXT,
 origin_fips			   TEXT,
+origin_locale		   INTEGER REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
 dest_code   		   TEXT,
 dest_city   		   TEXT,
 dest_admin0		   	   TEXT,
 dest_admin1		   	   TEXT,
 dest_fips			   TEXT,
+dest_locale			   INTEGER REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
 distance	   		   INTEGER NOT NULL,
 passengers	   		   INTEGER NOT NULL
 );

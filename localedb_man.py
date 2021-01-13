@@ -1216,10 +1216,24 @@ class MobilitySchema(Schema):
         print(df.head())
         try:
             df.to_sql('airtraffic', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
+            success = True
         except IntegrityError as e:
             assert isinstance(e.orig, UniqueViolation)
             print("Airtraffic data is already loaded in LocaleDB.")
+            success = False
 
+        if success:
+            for merge_field in ['fips','admin1','admin0']:
+                print(f"Updating origin with {merge_field}...")
+                if merge_field == 'fips':
+                    nullified = False
+                else:
+                    nullified = True
+                cmd = airtraffic.gen_sql_update("origin",merge_field,nullified=nullified)
+                self.engine.execute(cmd)
+            print(f"Updating destination with fips...")
+            cmd = airtraffic.gen_sql_update("dest","fips",nullified=False)
+            self.engine.execute(cmd)                
 
     def test(self):
         with self.conn.dbi.cursor() as c:

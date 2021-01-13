@@ -469,8 +469,12 @@ def airtraffic(year, state, min_pax):
 
     cols = list(df_final.columns)
     cols.remove("passengers")
-
-    df_agg = df_final.groupby(cols, as_index=False)[["passengers"]].sum()
+    grpr = ['origin_airport_code','dest_airport_code','timestamp']
+    df_agg_ = df_final.groupby(grpr, as_index=False)[["passengers"]].sum()
+    df_final_dedupe = df_final[cols].drop_duplicates()
+    df_agg = pd.merge(df_agg_, df_final_dedupe,  how='left', 
+                      left_on=['origin_airport_code','dest_airport_code', 'timestamp'],
+                      right_on = ['origin_airport_code','dest_airport_code', 'timestamp'])        
 
     # Final cleanup
     df_agg.replace("#name?", np.nan, inplace=True)
@@ -479,7 +483,7 @@ def airtraffic(year, state, min_pax):
     df_agg = df_agg.sort_values("month").reset_index(drop=True)
 
     if state != '-':
-        df_agg = df_agg[df_agg['dest_state_abr']==state]
+        df_agg = df_agg[df_agg['dest_admin1']==state_conv_d[state]]
 
     df_agg = df_agg[keepers]
     del df_agg['month']
@@ -494,3 +498,27 @@ def airtraffic(year, state, min_pax):
 
     cleanup(wrkdir, files_to_unzip)
     return df_agg
+
+def gen_sql_update(origin_dest, merge_field,nullified=False):
+    '''
+    Takes in either origin or destination, and the field to merge on {fips, admin1, admin0}
+    '''
+    if nullified==True:
+        addition = f"{origin_dest}_locale IS NULL AND "
+    else:
+        addition = ""
+    sql = f"""
+        UPDATE 
+            mobility.airtraffic
+        SET
+            {origin_dest}_locale = locs.id
+        FROM (
+            SELECT * FROM
+              (SELECT {origin_dest}_{merge_field} FROM mobility.airtraffic) AS air
+              LEFT JOIN (SELECT id, {merge_field} FROM main.locale) AS locales
+              ON air.{origin_dest}_{merge_field} = locales.{merge_field}) 
+            AS locs
+        WHERE {addition}
+            airtraffic.{origin_dest}_{merge_field} = locs.{origin_dest}_{merge_field};
+        """
+    return sql
