@@ -511,7 +511,7 @@ def gen_sql_update(origin_dest, merge_field,nullified=False):
         UPDATE 
             mobility.airtraffic
         SET
-            {origin_dest}_locale = locs.id
+            {origin_dest}_locale_id = locs.id
         FROM (
             SELECT * FROM
               (SELECT {origin_dest}_{merge_field} FROM mobility.airtraffic) AS air
