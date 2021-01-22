@@ -504,7 +504,7 @@ def gen_sql_update(origin_dest, merge_field,nullified=False):
     Takes in either origin or destination, and the field to merge on {fips, admin1, admin0}
     '''
     if nullified==True:
-        addition = f"{origin_dest}_locale IS NULL AND "
+        addition = f"{origin_dest}_locale_id IS NULL AND "
     else:
         addition = ""
     sql = f"""
@@ -522,3 +522,27 @@ def gen_sql_update(origin_dest, merge_field,nullified=False):
             airtraffic.{origin_dest}_{merge_field} = locs.{origin_dest}_{merge_field};
         """
     return sql
+
+def add_columns():
+    sql = f"""
+    ALTER TABLE mobility.airtraffic
+    ADD COLUMN origin_admin0 TEXT,
+    ADD COLUMN origin_admin1 TEXT,
+    ADD COLUMN origin_fips   TEXT,
+    ADD COLUMN dest_admin0   TEXT,
+    ADD COLUMN dest_admin1   TEXT,
+    ADD COLUMN dest_fips     TEXT;
+    """
+    return sql
+
+def drop_columns():
+    sql = f"""
+    ALTER TABLE mobility.airtraffic
+    DROP COLUMN origin_admin0,
+    DROP COLUMN origin_admin1,
+    DROP COLUMN origin_fips,
+    DROP COLUMN dest_admin0,
+    DROP COLUMN dest_admin1,
+    DROP COLUMN dest_fips;
+    """
+    return sql    

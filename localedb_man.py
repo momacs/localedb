@@ -1211,6 +1211,9 @@ class MobilitySchema(Schema):
 
 
     def load_airtraffic(self,year, state, min_pax):
+        print("Updating airtraffic schema...")
+        cmd = airtraffic.add_columns()
+        self.engine.execute(cmd)        
         print(f"Loading air traffic data for {year} for {state} filtering for {min_pax} minimum passengers per flight...")
         df = airtraffic.airtraffic(year, state, int(min_pax))
         print(df.head())
@@ -1233,7 +1236,11 @@ class MobilitySchema(Schema):
                 self.engine.execute(cmd)
             print(f"Updating destination with fips...")
             cmd = airtraffic.gen_sql_update("dest","fips",nullified=False)
-            self.engine.execute(cmd)                
+            self.engine.execute(cmd)
+        
+        print("Removing extraneous columns in airtraffic schema...")
+        cmd = airtraffic.drop_columns()
+        self.engine.execute(cmd)                            
 
     def test(self):
         with self.conn.dbi.cursor() as c:
