@@ -1189,7 +1189,7 @@ class MobilitySchema(Schema):
         del(df['State'])
         df.columns = renamed_cols
         df = self.get_locales(df)
-        return df       
+        return df      
 
     def load_mobility(self, state):
         """
@@ -1209,6 +1209,59 @@ class MobilitySchema(Schema):
             assert isinstance(e.orig, UniqueViolation)
             print("Mobility data is already loaded in LocaleDB.")
 
+    def select_non_null(self,row, origin_dest):
+        if not row[f'{origin_dest}_locale_id']:
+            row[f'{origin_dest}_locale_id'] = row['locale_id']
+        return row[f'{origin_dest}_locale_id']
+
+    def geo_merge(self, left, right, origin_dest='origin'):
+        left = pd.merge(left, 
+                        right.rename(columns={'admin0': f'{origin_dest}_admin0', 'admin1': f'{origin_dest}_admin1'}),
+                        how='left', 
+                        left_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'], 
+                        right_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'])
+        left[f'{origin_dest}_locale_id'] = left.apply(lambda row: self.select_non_null(row, origin_dest), axis=1)
+        del(left['locale_id'])
+        return left
+
+    def fix_airtraffic_nulls(self):
+        orig_na = pd.read_sql("SELECT * FROM mobility.airtraffic where origin_locale_id is NULL", self.engine)
+        dest_na = pd.read_sql("SELECT * FROM mobility.airtraffic where dest_locale_id is NULL", self.engine)
+
+        orig_na_sub = orig_na[['origin_admin0', 'origin_admin1']].rename(columns={'origin_admin0': 'admin0', 'origin_admin1': 'admin1'})
+        dest_na_sub = dest_na[['dest_admin0', 'dest_admin1']].rename(columns={'dest_admin0': 'admin0', 'dest_admin1': 'admin1'})
+        df_na = orig_na_sub.append(dest_na_sub)
+        df_na = df_na.drop_duplicates()
+        df_na['locale_id'] = 1
+        df_na['locale_id'] = df_na['locale_id'].apply(lambda x: rd.randint(9000000,9999999))
+        print("Adding the following discovered locales...")
+        print(df_na.head())
+
+        cur = self.dbi.conn.cursor()
+        for index, row in df_na.iterrows():
+            sql = 'insert into main.locale (id, admin0, admin1) values (%s, %s, %s)'
+            cur.execute(sql, (row['locale_id'], row['admin0'], row['admin1']))
+        self.dbi.conn.commit()
+
+        orig_na_fixed = self.geo_merge(orig_na, df_na, 'origin')
+        orig_na_fixed = self.geo_merge(orig_na_fixed, df_na, 'dest')
+
+        dest_na_fixed = self.geo_merge(dest_na, df_na, 'origin')
+        dest_na_fixed = self.geo_merge(dest_na_fixed, df_na, 'dest')        
+
+        print("Updating null locales in airtraffic table...")
+        cur = self.dbi.conn.cursor()
+        for index, row in orig_na_fixed.iterrows():
+            sql = 'update mobility.airtraffic set origin_locale_id = %s where id = %s'
+            cur.execute(sql, (row['origin_locale_id'], row['id']))
+        self.dbi.conn.commit()
+
+        cur = self.dbi.conn.cursor()
+        for index, row in dest_na_fixed.iterrows():
+            sql = 'update mobility.airtraffic set dest_locale_id = %s where id = %s'
+            cur.execute(sql, (row['dest_locale_id'], row['id']))
+        self.dbi.conn.commit()        
+        return
 
     def load_airtraffic(self,year, state, min_pax):
         print("Updating airtraffic schema...")
@@ -1238,6 +1291,7 @@ class MobilitySchema(Schema):
             cmd = airtraffic.gen_sql_update("dest","fips",nullified=False)
             self.engine.execute(cmd)
         
+        self.fix_airtraffic_nulls()
         print("Removing extraneous columns in airtraffic schema...")
         cmd = airtraffic.drop_columns()
         self.engine.execute(cmd)                            

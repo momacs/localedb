@@ -545,4 +545,4 @@ def drop_columns():
     DROP COLUMN dest_admin1,
     DROP COLUMN dest_fips;
     """
-    return sql    
+    return sql
