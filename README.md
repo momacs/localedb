@@ -23,6 +23,7 @@ As depicted on the figure above, the current projection is for LocaleDB to conta
 - **Population** (e.g., households, their incomes, age of people, etc.)
 - **Geographic and cartographic** (e.g., area of land, population density)
 -​ **Mobility** (mobile-phone based): measures of the number of trips individuals take
+-​ **Air Traffic**: number of passengers landing in US cities; includes origin and destination
 - **Health factors and outcomes** (e.g., diet, exercise, access to care, etc.)
 - **Local events** (e.g., dates and sizes of mass protests)
 - **Meteorological**
@@ -191,6 +192,18 @@ To import weather data from 2010 to 2020, run:
 $ localedb load weather 2010 2020
 ```
 
+To import mobility data for Alaska run:
+
+```
+$ localedb load mobility AK
+```
+
+To import air traffic data for 2019 for flights travelling to Alaska which had more than 25 passengers run:
+
+```
+$ localedb load airtraffic 2019 AK 25
+```
+
 To import synthetic population data, run:
 
 ```
@@ -300,6 +313,9 @@ docker-compose run --rm localedb load weather 2010 2020
 
 ## Load mobility data for AK:
 docker-compose run --rm localedb load mobility AK
+
+## Load air traffic data for 2019 for flights travelling to AK filtering for flights with more than 25 passengers:
+docker-compose run --rm localedb load airtraffic 2019 AK 25
 ```
 
 You can stop the containers with:

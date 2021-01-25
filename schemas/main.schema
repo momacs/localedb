@@ -5,7 +5,7 @@ DROP SCHEMA IF EXISTS $pg_schema_main CASCADE;
 CREATE SCHEMA $PG_SCHEMA_MAIN;
 
 CREATE TABLE $PG_SCHEMA_MAIN.locale (  -- referenced from hypertable
-id      INTEGER PRIMARY KEY,
+id      SERIAL PRIMARY KEY,
 iso2    CHAR(2),           -- ISO 3166-1 alpha-2 country code
 iso3    CHAR(3),           -- ISO 3166-1 alpha-3 country code
 iso_num INTEGER,           -- ISO 3166-1 numeric country code
