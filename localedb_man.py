@@ -351,8 +351,8 @@ class MainSchema(Schema):
         with self.dbi.conn.cursor() as c:
             c.execute(f'DELETE FROM {self.dbi.pg_schema_main}.locale;')
             psycopg2.extras.execute_batch(c,
-                f'INSERT INTO {self.dbi.pg_schema_main}.locale (id, iso2, iso3, iso_num, fips, admin0, admin1, admin2, lat, long, pop) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);',
-                ((r[0], r[1], r[2], r[3], r[4], r[7], r[6], r[5], r[8], r[9], r[11]) for r in rows)
+                f'INSERT INTO {self.dbi.pg_schema_main}.locale (iso2, iso3, iso_num, fips, admin0, admin1, admin2, lat, long, pop) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);',
+                ((r[1], r[2], r[3], r[4], r[7], r[6], r[5], r[8], r[9], r[11]) for r in rows)
             )
         self.dbi.conn.commit()
         self.dbi.vacuum(f'{self.dbi.pg_schema_main}.locale')
@@ -1232,15 +1232,20 @@ class MobilitySchema(Schema):
         dest_na_sub = dest_na[['dest_admin0', 'dest_admin1']].rename(columns={'dest_admin0': 'admin0', 'dest_admin1': 'admin1'})
         df_na = orig_na_sub.append(dest_na_sub)
         df_na = df_na.drop_duplicates()
-        df_na['locale_id'] = 1
-        df_na['locale_id'] = df_na['locale_id'].apply(lambda x: rd.randint(9000000,9999999))
+
+        # obtain future IDs...
+        cur = self.dbi.conn.cursor()
+        cur.execute("select max(id) from main.locale;")
+        max_id = cur.fetchone()[0]     
+        print(f"Current max id in locales table is..{max_id}")   
+        df_na['locale_id'] = np.arange(max_id + 1, max_id + 1 + len(df_na))
         print("Adding the following discovered locales...")
         print(df_na.head())
 
         cur = self.dbi.conn.cursor()
         for index, row in df_na.iterrows():
-            sql = 'insert into main.locale (id, admin0, admin1) values (%s, %s, %s)'
-            cur.execute(sql, (row['locale_id'], row['admin0'], row['admin1']))
+            sql = 'insert into main.locale (admin0, admin1) values (%s, %s)'
+            cur.execute(sql, (row['admin0'], row['admin1']))
         self.dbi.conn.commit()
 
         orig_na_fixed = self.geo_merge(orig_na, df_na, 'origin')
