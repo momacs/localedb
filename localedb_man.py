@@ -26,6 +26,9 @@ from sqlalchemy  import create_engine
 from psycopg2.errors import UniqueViolation
 from sqlalchemy.exc  import IntegrityError
 
+sys.path.append('/usr/share/localedb/scripts')
+import airtraffic
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 def req_argn(n):
@@ -45,7 +48,7 @@ class DBI(object):
     """Database interface.
     """
 
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, cursor_factory=psycopg2.extras.NamedTupleCursor):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, cursor_factory=psycopg2.extras.NamedTupleCursor):
         self.pg_host        = pg_host
         self.pg_port        = pg_port
         self.pg_usr         = pg_usr
@@ -58,6 +61,7 @@ class DBI(object):
         self.pg_schema_vax  = pg_schema_vax
         self.pg_schema_health  = pg_schema_health
         self.pg_schema_weather  = pg_schema_weather
+        self.pg_schema_mobility  = pg_schema_mobility
 
         self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
 
@@ -347,8 +351,8 @@ class MainSchema(Schema):
         with self.dbi.conn.cursor() as c:
             c.execute(f'DELETE FROM {self.dbi.pg_schema_main}.locale;')
             psycopg2.extras.execute_batch(c,
-                f'INSERT INTO {self.dbi.pg_schema_main}.locale (id, iso2, iso3, iso_num, fips, admin0, admin1, admin2, lat, long, pop) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);',
-                ((r[0], r[1], r[2], r[3], r[4], r[7], r[6], r[5], r[8], r[9], r[11]) for r in rows)
+                f'INSERT INTO {self.dbi.pg_schema_main}.locale (iso2, iso3, iso_num, fips, admin0, admin1, admin2, lat, long, pop) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);',
+                ((r[1], r[2], r[3], r[4], r[7], r[6], r[5], r[8], r[9], r[11]) for r in rows)
             )
         self.dbi.conn.commit()
         self.dbi.vacuum(f'{self.dbi.pg_schema_main}.locale')
@@ -1093,11 +1097,219 @@ class WeatherSchema(Schema):
             c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_weather}.weather;')
             print(c.fetchone().n)            
 
+# ----------------------------------------------------------------------------------------------------------------------
+class MobilitySchema(Schema):
+    """County mobility data is available here: https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD
+
+    Data mirror: https://world-modelers.s3.amazonaws.com/data/Trips_by_Distance.csv 
+    (will become stale)
+    """
+
+
+    def add_zero(self, x):
+        # For FIPS sans leading zero
+        if len(x)<5:
+            return "0" + x
+        else:
+            return x   
+
+    def get_locales(self, df):
+        locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
+        df = df.join(locale_df.set_index('fips'), how='inner', on='fips')
+        df = df.rename(columns = {'id': 'locale_id'})
+        del(df['fips'])
+        return df
+
+
+    def stamper(self, x):
+        temp = x.split("/")
+
+        y = temp[0]
+        m = temp[1]
+        d = temp[2]
+        
+        return f'{y}-{m}-{d}'
+
+    def process_mobility(self, state):
+        # Read in data...new version of csv
+        trips_fn = 'Trips_by_Distance.csv'
+        #wrkdir = os.getcwd()
+
+        df_full = pd.read_csv(trips_fn, sep=",", 
+                              converters={'County FIPS': lambda x: self.add_zero(str(x))},engine='python')
+
+        df_full = df_full[df_full["Level"] == "County"]
+
+                # Add timestamp
+        df = df_full.copy()
+        df["Timestamp"] = df.Date.apply(lambda x: self.stamper(x))
+
+        # Delete unneeded columns
+        delete_me = ["Level", "Date", "State FIPS"]
+        for me in delete_me:
+            del df[me]
+            
+        # Rename column
+        df.rename(columns={"State Postal Code": "State"}, inplace=True)
+
+        # Filter by State
+        if state != '-':
+            df = df[df['State'] == state]
+
+        # Drop "County" from County Name
+        df["County Name"]=  df["County Name"].apply(lambda x: str(x).replace("County", "").strip())
+
+        # Reorder columns
+        new_cols = ['Timestamp', 'County Name', 'State', 'County FIPS','Population Staying at Home',
+                'Population Not Staying at Home', 'Number of Trips',
+                'Number of Trips <1', 'Number of Trips 1-3', 'Number of Trips 3-5',
+                'Number of Trips 5-10', 'Number of Trips 10-25',
+                'Number of Trips 25-50', 'Number of Trips 50-100',
+                'Number of Trips 100-250', 'Number of Trips 250-500',
+                'Number of Trips >=500']
+        df = df[new_cols]
+
+        # Delete rows without data
+        df = df.dropna()
+
+        # Convert people to integers
+        cols = list(df.columns[4:])
+        for col in cols:
+            df[col]= df[col].astype(int) 
+
+        renamed_cols = ['ts', 'fips','pop_home',
+                    'pop_mobile', 'n_trips',
+                    'n_trips_lt_1', 'n_trips_1_3', 'n_trips_3_5',
+                    'n_trips_5_10', 'n_trips_10_25',
+                    'n_trips_25_50', 'n_trips_50_100',
+                    'n_trips_100_250', 'n_trips_250_500',
+                    'n_trips_gte_500']       
+
+        del(df['County Name'])
+        del(df['State'])
+        df.columns = renamed_cols
+        df = self.get_locales(df)
+        return df      
+
+    def load_mobility(self, state):
+        """
+        Loads Flu vaccine data to database.
+        Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
+        """
+        print("\nDownloading mobility data...")
+        download_url = 'https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD'
+        urllib.request.urlretrieve(download_url, 'Trips_by_Distance.csv')
+        print("...download complete!\nProcessing data...")
+        mobility = self.process_mobility(state)
+        print("...data processing complete!\nSample:\n")
+        print(mobility.head())
+        try:
+            mobility.to_sql('mobility', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print("Mobility data is already loaded in LocaleDB.")
+
+    def select_non_null(self,row, origin_dest):
+        if not row[f'{origin_dest}_locale_id']:
+            row[f'{origin_dest}_locale_id'] = row['locale_id']
+        return row[f'{origin_dest}_locale_id']
+
+    def geo_merge(self, left, right, origin_dest='origin'):
+        left = pd.merge(left, 
+                        right.rename(columns={'admin0': f'{origin_dest}_admin0', 'admin1': f'{origin_dest}_admin1'}),
+                        how='left', 
+                        left_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'], 
+                        right_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'])
+        left[f'{origin_dest}_locale_id'] = left.apply(lambda row: self.select_non_null(row, origin_dest), axis=1)
+        del(left['locale_id'])
+        return left
+
+    def fix_airtraffic_nulls(self):
+        orig_na = pd.read_sql("SELECT * FROM mobility.airtraffic where origin_locale_id is NULL", self.engine)
+        dest_na = pd.read_sql("SELECT * FROM mobility.airtraffic where dest_locale_id is NULL", self.engine)
+
+        orig_na_sub = orig_na[['origin_admin0', 'origin_admin1']].rename(columns={'origin_admin0': 'admin0', 'origin_admin1': 'admin1'})
+        dest_na_sub = dest_na[['dest_admin0', 'dest_admin1']].rename(columns={'dest_admin0': 'admin0', 'dest_admin1': 'admin1'})
+        df_na = orig_na_sub.append(dest_na_sub)
+        df_na = df_na.drop_duplicates()
+
+        # obtain future IDs...
+        cur = self.dbi.conn.cursor()
+        cur.execute("select max(id) from main.locale;")
+        max_id = cur.fetchone()[0]     
+        print(f"Current max id in locales table is..{max_id}")   
+        df_na['locale_id'] = np.arange(max_id + 1, max_id + 1 + len(df_na))
+        print("Adding the following discovered locales...")
+        print(df_na.head())
+
+        cur = self.dbi.conn.cursor()
+        for index, row in df_na.iterrows():
+            sql = 'insert into main.locale (admin0, admin1) values (%s, %s)'
+            cur.execute(sql, (row['admin0'], row['admin1']))
+        self.dbi.conn.commit()
+
+        orig_na_fixed = self.geo_merge(orig_na, df_na, 'origin')
+        orig_na_fixed = self.geo_merge(orig_na_fixed, df_na, 'dest')
+
+        dest_na_fixed = self.geo_merge(dest_na, df_na, 'origin')
+        dest_na_fixed = self.geo_merge(dest_na_fixed, df_na, 'dest')        
+
+        print("Updating null locales in airtraffic table...")
+        cur = self.dbi.conn.cursor()
+        for index, row in orig_na_fixed.iterrows():
+            sql = 'update mobility.airtraffic set origin_locale_id = %s where id = %s'
+            cur.execute(sql, (row['origin_locale_id'], row['id']))
+        self.dbi.conn.commit()
+
+        cur = self.dbi.conn.cursor()
+        for index, row in dest_na_fixed.iterrows():
+            sql = 'update mobility.airtraffic set dest_locale_id = %s where id = %s'
+            cur.execute(sql, (row['dest_locale_id'], row['id']))
+        self.dbi.conn.commit()        
+        return
+
+    def load_airtraffic(self,year, state, min_pax):
+        print("Updating airtraffic schema...")
+        cmd = airtraffic.add_columns()
+        self.engine.execute(cmd)        
+        print(f"Loading air traffic data for {year} for {state} filtering for {min_pax} minimum passengers per flight...")
+        df = airtraffic.airtraffic(year, state, int(min_pax))
+        print(df.head())
+        try:
+            df.to_sql('airtraffic', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
+            success = True
+        except IntegrityError as e:
+            assert isinstance(e.orig, UniqueViolation)
+            print("Airtraffic data is already loaded in LocaleDB.")
+            success = False
+
+        if success:
+            for merge_field in ['fips','admin1','admin0']:
+                print(f"Updating origin with {merge_field}...")
+                if merge_field == 'fips':
+                    nullified = False
+                else:
+                    nullified = True
+                cmd = airtraffic.gen_sql_update("origin",merge_field,nullified=nullified)
+                self.engine.execute(cmd)
+            print(f"Updating destination with fips...")
+            cmd = airtraffic.gen_sql_update("dest","fips",nullified=False)
+            self.engine.execute(cmd)
+        
+        self.fix_airtraffic_nulls()
+        print("Removing extraneous columns in airtraffic schema...")
+        cmd = airtraffic.drop_columns()
+        self.engine.execute(cmd)                            
+
+    def test(self):
+        with self.conn.dbi.cursor() as c:
+            c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_mobility}.mobility;')
+            print(c.fetchone().n)
 
 # ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, dpath_log, dpath_rt):
-        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather)
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, dpath_log, dpath_rt):
+        self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility)
         self.fsi = FSI(dpath_log, dpath_rt)
         self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
 
@@ -1117,8 +1329,10 @@ class LocaleDB(object):
         return HealthSchema(self.dbi, self.fsi, self.engine)        
 
     def get_weather(self):
-        return WeatherSchema(self.dbi, self.fsi, self.engine)                
+        return WeatherSchema(self.dbi, self.fsi, self.engine)              
 
+    def get_mobility(self):
+        return MobilitySchema(self.dbi, self.fsi, self.engine)                        
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -1126,28 +1340,36 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    if len(sys.argv[1:]) < 15:
-        print(f'Incorrect number of arguments; at least 15 are required.')
-        sys.exit(1)
+    min_arg_length = 16
 
-    if sys.argv[15] == 'load-dis':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_dis().load_disease(sys.argv[16])
-    elif sys.argv[15] == 'load-main':
+    if len(sys.argv[1:]) < min_arg_length:
+        print(f'Incorrect number of arguments; at least ${min_arg_length} are required.')
+        sys.exit(1)    
+
+    if sys.argv[min_arg_length] == 'load-dis':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_dis().load_disease(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-main':
         print(*sys.argv)
-        LocaleDB(*sys.argv[1:15]).get_main().load_locales()
-    elif sys.argv[15] == 'load-pop-state':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_pop().load_state(sys.argv[16])
-    elif sys.argv[15] == 'load-vax':
-        req_argn(15)
-        LocaleDB(*sys.argv[1:15]).get_vax().load_vax()
-    elif sys.argv[15] == 'load-health':
-        req_argn(16)
-        LocaleDB(*sys.argv[1:15]).get_health().load_health(sys.argv[16])        
-    elif sys.argv[15] == 'load-weather':
-        req_argn(17)
-        LocaleDB(*sys.argv[1:15]).get_weather().load_weather(sys.argv[16], sys.argv[17])                
+        LocaleDB(*sys.argv[1:min_arg_length]).get_main().load_locales()
+    elif sys.argv[min_arg_length] == 'load-pop-state':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_pop().load_state(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-vax':
+        req_argn(min_arg_length)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_vax().load_vax()
+    elif sys.argv[min_arg_length] == 'load-health':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_health().load_health(sys.argv[min_arg_length+1])        
+    elif sys.argv[min_arg_length] == 'load-weather':
+        req_argn(min_arg_length+2)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_weather().load_weather(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])                
+    elif sys.argv[min_arg_length] == 'load-mobility':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_mobility(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-airtraffic':
+        req_argn(min_arg_length+3)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_airtraffic(sys.argv[min_arg_length+1],sys.argv[min_arg_length+2],sys.argv[min_arg_length+3])
     else:
-        print(f'Unknown command: {sys.argv[15]}')
+        print(f'Unknown command: {sys.argv[min_arg_length]}')
         sys.exit(1)

@@ -15,6 +15,7 @@ COPY localedb /usr/local/bin/localedb
 RUN mkdir -p /usr/share/localedb
 
 COPY localedb_man.py /usr/share/localedb/localedb_man.py
+COPY scripts /usr/share/localedb/scripts
 
 VOLUME /usr/share/localedb/schemas /usr/share/localedb/scripts /usr/share/localedb/data
 
