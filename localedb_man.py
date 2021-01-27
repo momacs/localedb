@@ -4,26 +4,25 @@
 import datetime
 import csv
 import io
+import itertools
 import math
 import numpy as np
 import os
 import pandas as pd
 import psycopg2
 import psycopg2.extras
+import random as rd
 import re
 import sys
 import time
 import urllib.request
-from ftplib import FTP
-import itertools
-import random as rd
 
-from abc         import ABC
-from collections import namedtuple
-from pathlib     import Path
-from sqlalchemy  import create_engine
-
+from abc             import ABC
+from collections     import namedtuple
+from ftplib          import FTP
+from pathlib         import Path
 from psycopg2.errors import UniqueViolation
+from sqlalchemy      import create_engine
 from sqlalchemy.exc  import IntegrityError
 
 sys.path.append('/usr/share/localedb/scripts')
@@ -702,7 +701,7 @@ class HealthSchema(Schema):
         """
         if len(row.yearspan)>4:
             row['start_year'] = int(row.yearspan.split('-')[0])
-            row['end_year'] = int(row.yearspan.split('-')[1])        
+            row['end_year'] = int(row.yearspan.split('-')[1])
         else:
             row['start_year'] = int(row.yearspan)
             row['end_year'] = int(row.yearspan)
@@ -715,7 +714,7 @@ class HealthSchema(Schema):
             ct = '00' + ct
         elif len(ct) == 2:
             ct = '0' + ct
-        
+
 
         if st == '00': # for all of US
             row['fips'] = '840'
@@ -724,7 +723,7 @@ class HealthSchema(Schema):
             row['fips'] = '000' + st
         else: # for a county
             row['fips'] = st + ct
-        return row        
+        return row
 
     def get_locales(self, df):
         locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
@@ -772,7 +771,7 @@ class HealthSchema(Schema):
             print(f"Loaded health data for {st_fips} successfully.")
         except IntegrityError as e:
             assert isinstance(e.orig, UniqueViolation)
-            print(f"Health data for {st_fips} is already loaded in LocaleDB.")            
+            print(f"Health data for {st_fips} is already loaded in LocaleDB.")
 
     def test(self):
         with self.conn.dbi.cursor() as c:
@@ -796,25 +795,25 @@ class WeatherSchema(Schema):
     """
 
     def countdown(self, t):
-        while t: 
-            mins, secs = divmod(t, 60) 
-            timer = '{:02d}:{:02d}'.format(mins, secs) 
-            print("Retry in: " + timer + " seconds", end="\r") 
-            time.sleep(1) 
+        while t:
+            mins, secs = divmod(t, 60)
+            timer = '{:02d}:{:02d}'.format(mins, secs)
+            print("Retry in: " + timer + " seconds", end="\r")
+            time.sleep(1)
             t -= 1
 
     def download_noaa(self, max_tries, min_delay, max_delay):
         i = 1
         while i <= max_tries:
-            
+
             try:
                 # Download (TO WRKDIR) 4 county weather files from NOAA ftp
                 ftp = FTP('ftp.ncdc.noaa.gov') # ftp access to ncdc.noaa.gov
                 ftp.login()                     # anonymous ftp login
                 ftp.cwd('pub/data/cirs/climdiv') # change directory
-      
+
                 # Get all the files on the ftp page and Filter to only the 4 county files
-                dirs = ftp.nlst() 
+                dirs = ftp.nlst()
                 description_files = [i for i in dirs if len(i.split('.'))>1]
 
                 #Delete any partial downloads
@@ -822,39 +821,39 @@ class WeatherSchema(Schema):
                     if os.path.exists(file):
                         os.remove(file)
                         print(f"Deleted {file}")
-                
+
                 files_to_download = []
                 for file in description_files:
 
                     if "climdiv-pcpncy" in file or "climdiv-tmaxcy" in file or "climdiv-tmincy"in file or "climdiv-tmpccy" in file:
                         files_to_download.append(file)
-                
-                for file in files_to_download:  
+
+                for file in files_to_download:
                     if os.path.isfile(file):
                         print('Already downloaded file: '+ file)
                         continue
-      
+
                     with open(file, 'wb') as fp:
                         print(f'Downloading: {file.split("/")[-1]}')
                         ftp.retrbinary('RETR ' + file, fp.write)
-            
-                i = 11  
-                print("\n")        
-                print(f"Complete. Files downloaded to: {os.getcwd()}") 
-                
+
+                i = 11
+                print("\n")
+                print(f"Complete. Files downloaded to: {os.getcwd()}")
+
             except Exception as e:
                 print(f'Exception: {e}')
                 if i <= max_tries:
-                    
+
                     sleep_time = rd.randint(min_delay, max_delay)
                     self.countdown(sleep_time)
-                    
+
                     continue
-                    
+
                 else:
                     print(f'Exceeded {max_tries} max download attempts')
                     break
-            i += 1  
+            i += 1
         return files_to_download
 
     def year_filter(self,df, yr_filter_str):
@@ -862,55 +861,55 @@ class WeatherSchema(Schema):
         df['year'] = df.noaa_code.apply(lambda x: x[-4:])
         df = df[~df["year"].str.contains('|'.join(yr_filter_str))]
         df = df.reset_index(drop=True)
-        
+
         del df['year']
-        
+
         return df
 
     # readin NOAA data and apply year filter
     def read_filter_data(self, file):
-        
+
         fn = file.split("/")[-1]
         print(f'Reading:    {fn}')
 
-        names = ['noaa_code',1,2,3,4,5,6,7,8,9,10,11,12] 
-        df = pd.read_csv(file, delim_whitespace=True, 
+        names = ['noaa_code',1,2,3,4,5,6,7,8,9,10,11,12]
+        df = pd.read_csv(file, delim_whitespace=True,
                          converters={'noaa_code': lambda x: str(x)},
                          engine='python',
-                         names=names, 
+                         names=names,
                          header=None)
 
         # Filter by selected years:
         print(f"Filtering:  {fn}")
         df = self.year_filter(df, self.yr_filter_str)
-        
+
         return df
 
     # pivot wx data from column to row
     def restack_df(self, df,fn):
-        
+
         if fn == "01":
             wx = "precipitation"
         if fn == "02":
-            wx = "Tavg"        
+            wx = "Tavg"
         if fn == "27":
-            wx = "Tmax"        
+            wx = "Tmax"
         if fn == "28":
             wx = "Tmin"
-        
+
         df = pd.DataFrame(df.set_index('noaa_code')\
                           .stack())\
                           .reset_index()\
                           .rename(columns={'level_1': 'month', 0: wx})
         return df
 
-    # Build full census FIPS to add to df    
+    # Build full census FIPS to add to df
     def census_fip(self, row):
         county_fip = row.noaa_fips[-3:]
         census_fips = row.census_state_fips + county_fip
-        
-        return census_fips    
-        
+
+        return census_fips
+
     # Remove "County" from county name
     def format_county(self, name):
         if "County" in name:
@@ -921,7 +920,7 @@ class WeatherSchema(Schema):
     def replace_it(self, x):
         temp = x[5:7]
         x = x.replace(temp,"wx")
-        return x        
+        return x
 
     def get_files(self):
         """
@@ -930,7 +929,7 @@ class WeatherSchema(Schema):
         print("Downloading FIPS lookups")
         urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/noaa_fips.txt', 'noaa_fips.txt')
         urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/noaa_states.txt', 'noaa_states.txt')
-        urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/state_fips.txt', 'state_fips.txt')        
+        urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/state_fips.txt', 'state_fips.txt')
         print("Downloading NOAA data")
         files_to_download = self.download_noaa(5, 30, 60)
 
@@ -949,7 +948,7 @@ class WeatherSchema(Schema):
         noaa = f"{os.getcwd()}/noaa_states.txt"
         noaa_conv = pd.read_csv(noaa, sep=",", converters={'code_noaa': lambda x: str(x)},engine='python')
 
-        # Census state-level FIPS 
+        # Census state-level FIPS
         state_fips = f"{os.getcwd()}/state_fips.txt"
         census_conv = pd.read_csv(state_fips, sep="\t", converters={'code': lambda x: str(x)}, engine='python')
 
@@ -973,17 +972,17 @@ class WeatherSchema(Schema):
             state = census_state[i]
             fips = census_code[i]
             trans[state] = [fips]
-            
+
         for temp_st in trans.keys():
             for i in range(len(noaa_state)):
                 temp_noaa_st = noaa_state[i]
-                
-                if temp_st == temp_noaa_st:
-                    trans[temp_st].append(noaa_code[i])  
 
-        # Delete census keys that do not have data in the NOAA data            
-        del_keys = []            
-        for temp_st in trans.keys():            
+                if temp_st == temp_noaa_st:
+                    trans[temp_st].append(noaa_code[i])
+
+        # Delete census keys that do not have data in the NOAA data
+        del_keys = []
+        for temp_st in trans.keys():
             if len(trans[temp_st]) == 1:
                    del_keys.append(temp_st)
         [trans.pop(key) for key in del_keys]
@@ -1006,9 +1005,9 @@ class WeatherSchema(Schema):
 
 
         # Back-up if ftp site fails; must have these files already in the directory
-        files_to_download=["climdiv-pcpncy-v1.0.0-20201104", 
-                           "climdiv-tmaxcy-v1.0.0-20201104", 
-                           "climdiv-tmincy-v1.0.0-20201104", 
+        files_to_download=["climdiv-pcpncy-v1.0.0-20201104",
+                           "climdiv-tmaxcy-v1.0.0-20201104",
+                           "climdiv-tmincy-v1.0.0-20201104",
                            "climdiv-tmpccy-v1.0.0-20201104"]
 
         starter = f"{os.getcwd()}/"
@@ -1017,21 +1016,21 @@ class WeatherSchema(Schema):
         # Read in and filter NOAA data
         df_list = []
         for file in files:
-            
+
             df_list.append(self.read_filter_data(file))
-            
-        # restack wx data column-to-row 
+
+        # restack wx data column-to-row
         df_stack = []
         for df in df_list:
 
             fn = df.noaa_code.iloc[0][5:7]
 
             df_ = self.restack_df(df,fn)
-            
+
             df_ = df_[~df_['noaa_code'].astype(str).str.startswith('50')]
-            
+
             df_['noaa_fips'] = df_.noaa_code.apply(lambda x: x[:5])
-            
+
             df_stack.append(df_)
 
         # Convert NOAA to Census FIPS
@@ -1040,30 +1039,30 @@ class WeatherSchema(Schema):
 
         df_aug = []
         for df in df_stack:
-            
+
             df_ = df.join(noaa_fips.set_index('noaa_fips'), how='left', on='noaa_fips')
             df_['noaa_state_fips'] = df_.noaa_fips.apply(lambda x: x[:2])
             df_ = df_.join(transformer_df, how='left', on='noaa_state_fips')
             df_['census_county_fips'] = df_.apply(lambda row: self.census_fip(row), axis=1)
-            
+
             df_aug.append(df_)
 
         df_join = []
         for df in df_aug:
             del df["census_state_fips"]
             del df["noaa_state_fips"]
-            df.rename(columns = {'noaa_fips':'noaa_county_fips', 
+            df.rename(columns = {'noaa_fips':'noaa_county_fips',
                                  'census_county_fips': 'fips',
                                  'Tavg': 'tavg',
                                  'Tmax': 'tmax',
                                  'Tmin': 'tmin',
                                  'precipitation': 'precip',
                                  'county_name': 'county'},
-                                 inplace = True) 
-            
+                                 inplace = True)
+
             df = df.replace(-99.90,np.NaN)
             df = df.replace(-9.99,np.NaN)
-            
+
             df_join.append(df)
 
         result = pd.concat(df_join, axis=1)
@@ -1084,24 +1083,24 @@ class WeatherSchema(Schema):
         self.get_files()
         weather = self.process_noaa(start_year, stop_year)
         print(weather.head())
-        
+
         try:
             weather.to_sql('weather', con=self.engine, schema=self.dbi.pg_schema_weather, index=False, if_exists='append')
             print(f"Loaded weather data for {start_year} through {stop_year} successfully.")
         except IntegrityError as e:
             assert isinstance(e.orig, UniqueViolation)
-            print(f"Weather data for {start_year} through {stop_year} is already loaded in LocaleDB.")            
+            print(f"Weather data for {start_year} through {stop_year} is already loaded in LocaleDB.")
 
     def test(self):
         with self.conn.dbi.cursor() as c:
             c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_weather}.weather;')
-            print(c.fetchone().n)            
+            print(c.fetchone().n)
 
 # ----------------------------------------------------------------------------------------------------------------------
 class MobilitySchema(Schema):
     """County mobility data is available here: https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD
 
-    Data mirror: https://world-modelers.s3.amazonaws.com/data/Trips_by_Distance.csv 
+    Data mirror: https://world-modelers.s3.amazonaws.com/data/Trips_by_Distance.csv
     (will become stale)
     """
 
@@ -1111,7 +1110,7 @@ class MobilitySchema(Schema):
         if len(x)<5:
             return "0" + x
         else:
-            return x   
+            return x
 
     def get_locales(self, df):
         locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
@@ -1127,7 +1126,7 @@ class MobilitySchema(Schema):
         y = temp[0]
         m = temp[1]
         d = temp[2]
-        
+
         return f'{y}-{m}-{d}'
 
     def process_mobility(self, state):
@@ -1135,7 +1134,7 @@ class MobilitySchema(Schema):
         trips_fn = 'Trips_by_Distance.csv'
         #wrkdir = os.getcwd()
 
-        df_full = pd.read_csv(trips_fn, sep=",", 
+        df_full = pd.read_csv(trips_fn, sep=",",
                               converters={'County FIPS': lambda x: self.add_zero(str(x))},engine='python')
 
         df_full = df_full[df_full["Level"] == "County"]
@@ -1148,7 +1147,7 @@ class MobilitySchema(Schema):
         delete_me = ["Level", "Date", "State FIPS"]
         for me in delete_me:
             del df[me]
-            
+
         # Rename column
         df.rename(columns={"State Postal Code": "State"}, inplace=True)
 
@@ -1175,7 +1174,7 @@ class MobilitySchema(Schema):
         # Convert people to integers
         cols = list(df.columns[4:])
         for col in cols:
-            df[col]= df[col].astype(int) 
+            df[col]= df[col].astype(int)
 
         renamed_cols = ['ts', 'fips','pop_home',
                     'pop_mobile', 'n_trips',
@@ -1183,13 +1182,13 @@ class MobilitySchema(Schema):
                     'n_trips_5_10', 'n_trips_10_25',
                     'n_trips_25_50', 'n_trips_50_100',
                     'n_trips_100_250', 'n_trips_250_500',
-                    'n_trips_gte_500']       
+                    'n_trips_gte_500']
 
         del(df['County Name'])
         del(df['State'])
         df.columns = renamed_cols
         df = self.get_locales(df)
-        return df      
+        return df
 
     def load_mobility(self, state):
         """
@@ -1215,10 +1214,10 @@ class MobilitySchema(Schema):
         return row[f'{origin_dest}_locale_id']
 
     def geo_merge(self, left, right, origin_dest='origin'):
-        left = pd.merge(left, 
+        left = pd.merge(left,
                         right.rename(columns={'admin0': f'{origin_dest}_admin0', 'admin1': f'{origin_dest}_admin1'}),
-                        how='left', 
-                        left_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'], 
+                        how='left',
+                        left_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'],
                         right_on=[f'{origin_dest}_admin0',f'{origin_dest}_admin1'])
         left[f'{origin_dest}_locale_id'] = left.apply(lambda row: self.select_non_null(row, origin_dest), axis=1)
         del(left['locale_id'])
@@ -1236,8 +1235,8 @@ class MobilitySchema(Schema):
         # obtain future IDs...
         cur = self.dbi.conn.cursor()
         cur.execute("select max(id) from main.locale;")
-        max_id = cur.fetchone()[0]     
-        print(f"Current max id in locales table is..{max_id}")   
+        max_id = cur.fetchone()[0]
+        print(f"Current max id in locales table is..{max_id}")
         df_na['locale_id'] = np.arange(max_id + 1, max_id + 1 + len(df_na))
         print("Adding the following discovered locales...")
         print(df_na.head())
@@ -1252,7 +1251,7 @@ class MobilitySchema(Schema):
         orig_na_fixed = self.geo_merge(orig_na_fixed, df_na, 'dest')
 
         dest_na_fixed = self.geo_merge(dest_na, df_na, 'origin')
-        dest_na_fixed = self.geo_merge(dest_na_fixed, df_na, 'dest')        
+        dest_na_fixed = self.geo_merge(dest_na_fixed, df_na, 'dest')
 
         print("Updating null locales in airtraffic table...")
         cur = self.dbi.conn.cursor()
@@ -1265,13 +1264,13 @@ class MobilitySchema(Schema):
         for index, row in dest_na_fixed.iterrows():
             sql = 'update mobility.airtraffic set dest_locale_id = %s where id = %s'
             cur.execute(sql, (row['dest_locale_id'], row['id']))
-        self.dbi.conn.commit()        
+        self.dbi.conn.commit()
         return
 
     def load_airtraffic(self,year, state, min_pax):
         print("Updating airtraffic schema...")
         cmd = airtraffic.add_columns()
-        self.engine.execute(cmd)        
+        self.engine.execute(cmd)
         print(f"Loading air traffic data for {year} for {state} filtering for {min_pax} minimum passengers per flight...")
         df = airtraffic.airtraffic(year, state, int(min_pax))
         print(df.head())
@@ -1295,11 +1294,11 @@ class MobilitySchema(Schema):
             print(f"Updating destination with fips...")
             cmd = airtraffic.gen_sql_update("dest","fips",nullified=False)
             self.engine.execute(cmd)
-        
+
         self.fix_airtraffic_nulls()
         print("Removing extraneous columns in airtraffic schema...")
         cmd = airtraffic.drop_columns()
-        self.engine.execute(cmd)                            
+        self.engine.execute(cmd)
 
     def test(self):
         with self.conn.dbi.cursor() as c:
@@ -1326,13 +1325,13 @@ class LocaleDB(object):
         return VaxSchema(self.dbi, self.fsi, self.engine)
 
     def get_health(self):
-        return HealthSchema(self.dbi, self.fsi, self.engine)        
+        return HealthSchema(self.dbi, self.fsi, self.engine)
 
     def get_weather(self):
-        return WeatherSchema(self.dbi, self.fsi, self.engine)              
+        return WeatherSchema(self.dbi, self.fsi, self.engine)
 
     def get_mobility(self):
-        return MobilitySchema(self.dbi, self.fsi, self.engine)                        
+        return MobilitySchema(self.dbi, self.fsi, self.engine)
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -1344,7 +1343,7 @@ if __name__ == '__main__':
 
     if len(sys.argv[1:]) < min_arg_length:
         print(f'Incorrect number of arguments; at least ${min_arg_length} are required.')
-        sys.exit(1)    
+        sys.exit(1)
 
     if sys.argv[min_arg_length] == 'load-dis':
         req_argn(min_arg_length+1)
@@ -1360,10 +1359,10 @@ if __name__ == '__main__':
         LocaleDB(*sys.argv[1:min_arg_length]).get_vax().load_vax()
     elif sys.argv[min_arg_length] == 'load-health':
         req_argn(min_arg_length+1)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_health().load_health(sys.argv[min_arg_length+1])        
+        LocaleDB(*sys.argv[1:min_arg_length]).get_health().load_health(sys.argv[min_arg_length+1])
     elif sys.argv[min_arg_length] == 'load-weather':
         req_argn(min_arg_length+2)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_weather().load_weather(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])                
+        LocaleDB(*sys.argv[1:min_arg_length]).get_weather().load_weather(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])
     elif sys.argv[min_arg_length] == 'load-mobility':
         req_argn(min_arg_length+1)
         LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_mobility(sys.argv[min_arg_length+1])
