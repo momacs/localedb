@@ -1349,7 +1349,7 @@ if __name__ == '__main__':
         req_argn(min_arg_length+1)
         LocaleDB(*sys.argv[1:min_arg_length]).get_dis().load_disease(sys.argv[min_arg_length+1])
     elif sys.argv[min_arg_length] == 'load-main':
-        print(*sys.argv)
+        req_argn(min_arg_length)
         LocaleDB(*sys.argv[1:min_arg_length]).get_main().load_locales()
     elif sys.argv[min_arg_length] == 'load-pop-state':
         req_argn(min_arg_length+1)
