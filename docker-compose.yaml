@@ -1,6 +1,5 @@
 version: "3.8"
 services:
-
   db:
     image: timescale/timescaledb-postgis:latest-pg12
     container_name: pg12
@@ -39,6 +38,7 @@ services:
       - vol_log:/usr/share/localedb/log
       - vol_schemas:/usr/share/localedb/schemas
       - ${PWD}/localedb_man.py:/usr/share/localedb/bin/localedb_man.py
+      - ${PWD}/scripts/:/usr/share/localedb/scripts/
       - ${PWD}/localedb:/usr/local/bin/localedb
 
 volumes:
