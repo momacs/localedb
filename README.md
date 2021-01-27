@@ -7,7 +7,7 @@ A database of global locales to support modeling and simulation in epidemiology 
 
 As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extentions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The content of the database is accessed via a Python package which provides a high level API to, for example, suggest U.S. counties similar to the county specified.
 
-<center><img height="526" alt="portfolio_view" src="https://raw.githubusercontent.com/momacs/localedb/b2dcef901773a61e9a58f55de2dea68b47f68904/media/design.png" /></center>
+<center><img height="526" alt="portfolio_view" src="https://raw.githubusercontent.com/momacs/localedb/6938209e19ac914bbf16b538c771a8824b4e24ad/media/design.png" /></center>
 
 This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require little to no manual management (periodic updates will be autonomous).  It will then be used for producing data that will drive modeling and simulation efforts.
 
@@ -22,13 +22,13 @@ As depicted on the figure above, the current projection is for LocaleDB to conta
 - **Medical countermeasures** (**MCMs**; e.g., vaccine availability, efficacy, and allocation strategies)
 - **Population** (e.g., households, their incomes, age of people, etc.)
 - **Geographic and cartographic** (e.g., area of land, population density)
--​ **Mobility** (mobile-phone based): measures of the number of trips individuals take
--​ **Air Traffic**: number of passengers landing in US cities; includes origin and destination
 - **Health factors and outcomes** (e.g., diet, exercise, access to care, etc.)
+- **Mobility** (e.g., number of trips taken by individuals based on mobile-phone data)
+- **Air Traffic** (e.g., number of passengers landing in US cities; includes origin and destination)
 - **Local events** (e.g., dates and sizes of mass protests)
-- **Meteorological**
+- **Meteorological** (e.g., monthly temperature and precipitation)
 
-All that data will be stratified by locale at all available levels of spatial aggregation (e.g., country, state, county, tract, block group, block).  In terms of temporal resolution, the highest frequency with which processes are sampled/measured will be the goal.  For example, disease dynamics will be represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes will be encoded with far fewer time steps (probably months).
+All that data is stratified by locale at all available levels of spatial aggregation (e.g., country, state, county, tract, block group, block).  In terms of temporal resolution, the highest frequency with which processes are sampled/measured is the goal.  For example, disease dynamics is represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes are encoded with far fewer time steps.
 
 
 ## Dependencies: Database Server
@@ -50,12 +50,6 @@ LocaleDB can be deployed to a development and production environments.  It is re
 **Note**: LocaleDB should not be deployed to a production environment yet.  This note will be removed when that deployment mode has been fully implemented and fully tested.
 
 
-## Dependencies: Python Package
-
-- [Python 3](https://www.python.org)
-- [psycopg2](https://pypi.org/project/psycopg2)
-
-
 ## Setup
 
 ### Command Line Management Tool
@@ -74,24 +68,6 @@ sh -c "$(wget -q https://raw.githubusercontent.com/momacs/localedb/master/setup.
 Alternatively, you can run the commands from the [`setup.sh`](setup.sh) script manually.
 
 **Production environment:** For production deployment, after the installation script above has finished, edit the `$HOME/bin/localedb` script and change `is_prod=0` to `is_prod=1`.  This step is left to be done manually to ensure intent.
-
-### Python Client Package
-
-It is never a bad idea to first create a new Python virtual environment:
-
-```
-# sudo apt install python3-venv  # may be needed on Linux
-
-python3 -m venv ./prj01
-cd prj01
-source ./bin/activate
-```
-
-Then, install the package like so:
-
-```
-pip install git+https://github.com/momacs/localedb.git
-```
 
 
 ## Sample Usage
@@ -243,23 +219,6 @@ localedb uninstall
 ```
 
 For the list of available commands, run `localedb`.  For an explanation of each command, run `localedb help`.  Keep in mind that some commands have subcommands.
-
-### Python
-
-Here is an example of the Python LocaleDB package can be used:
-
-```python
-from localedb import LocaleDB
-db = LocaleDB()
-
-db.set_pop_view_household('02')     # constrain view to households located in Alaska
-print(db.get_pop_size())            # get size of population that lives in those households
-
-db.set_pop_view_household('02013')  # do the same for one of the counties in Alaska
-print(db.get_pop_size())
-```
-
-If the database is not installed on the localhost (or if any other connection parameters need to be adjusted), they should be passed to the `LocaleDB` class' constructor.  Documentation of the package will be published later on.
 
 
 ## Docker Usage
