@@ -3,6 +3,11 @@
 A database of global locales to support modeling and simulation in epidemiology with the current focus on the COVID 19 pandemic.
 
 
+## Abstract
+
+Many models of COVID 19 have been proposed to date.  When compared against each other, it appears that many of these models make mutually incompatible predictions.  Such discrepancies between the output of competing models and simulations need explanation.  Inspecting the source code of those models in search for differences which might turn out to be the antecedents of the observed differences is a natural tendency.  Scrutinizing source code, however, especially when done automatically, is a valid approach only if model inputs are guaranteed to be identical.  For example, if two models use different subsets of the available disease dynamics data, they will likely yield different results even if the epidemiological and social (and other) mechanisms are modeled identically.  Moreover, even if the two models are indistinguishable in terms of how they model the various dynamics, comparing them will be hard if they are used to predict the trajectory of an epidemic in distinct locales (e.g., two different U.S. states or counties).  The LocaleDB initiative aims to unify, homogenize, and standardize various data sources that are inputs to models of the COVID 19 pandemic and thus provide data control for computational experiments of mass model comparison.
+
+
 ## Design
 
 As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extensions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The database can be accessed either via a PostgreSQL driver or a language-specific binding which provide a high level API to, for example, suggest U.S. counties similar to the county specified.  To that effect, we are currently working on [Python](https://github.com/momacs/localedb-py) bindings.
