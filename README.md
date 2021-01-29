@@ -307,6 +307,10 @@ To create a new dashboard, create it via the Grafana UI and export it as a `JSON
 ### Data Sources
 
 - [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
+- [CDC: Influenza Vaccination Coverage](https://www.cdc.gov/flu/fluvaxview/index.htm)
+- [County Health Rankings and Roadmaps](https://www.countyhealthrankings.org/explore-health-rankings/rankings-data-documentation)
+- [Bureau of Transportation Statistics: Airlines and Airports](https://www.bts.gov/topics/airlines-and-airports-0)
+- [NOAA nClimDiv](https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00005)
 - [Keystone: COVID-19 Intervention Data](https://github.com/Keystone-Strategy/covid19-intervention-data)
 - [2010 U.S. Synthesized Population Dataset](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
 - [US Census Bureau: TIGER/Line Shapefiles (2010)](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.2010.html)
