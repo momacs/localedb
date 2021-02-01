@@ -36,11 +36,9 @@ As depicted on the figure above, the current projection is for LocaleDB to conta
 All that data is stratified by locale at all available levels of spatial aggregation (e.g., country, state, county, tract, block group, block).  In terms of temporal resolution, the highest frequency with which processes are sampled/measured is the goal.  For example, disease dynamics is represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes are encoded with far fewer time steps.
 
 
-## Dependencies: Database Server
+## Dependencies
 
-LocaleDB can be deployed to a development and production environments.  It is recommended to familiarize yourself with the software using the development environment first.
-
-### Development Environment
+### Development/Test Environment
 
 - curl or wget
 - [Docker](https://www.docker.com)
@@ -52,11 +50,93 @@ LocaleDB can be deployed to a development and production environments.  It is re
 - PostgreSQL server (with [PostGIS](https://github.com/postgis/postgis) and [TimescaleDB](https://github.com/timescale/timescaledb) extensions)
 - [Python 3](https://www.python.org)
 
-**Note**: LocaleDB should not be deployed to a production environment yet.  This note will be removed when that deployment mode has been fully implemented and fully tested.
+**Note**: Full production environment support will be added at a later date.
 
 
-## Setup
+## Setup and Example Usage: Development/Test Environment
 
+The development environment is based around Docker so you will need to get that installed first.  After sorting that out, clone the repo and changing the working directory.  The cloned repo directory will be where all the data is stored so if you plan on loading a whole lot (looking at you, `geo` and `pop` data users), make sure you have enough space on that subtree.
+
+```
+git clone https://github.com/momacs/localedb
+cd localedb
+```
+
+Then:
+
+```
+# Build the container:
+./build-docker.sh
+
+# Start the container (takes about a minute for Postgres to become available):
+docker-compose up -d
+
+# Initialize the database inside the container:
+docker-compose run --rm localedb setup
+```
+
+Displaying info and loading data is done using the following commands:
+
+```
+# Display info:
+docker-compose run --rm localedb info all
+
+# Load disease data for COVID-19:
+docker-compose run --rm localedb load dis COVID-19
+
+# Load Alaska geographic and cartographic data:
+docker-compose run --rm localedb load geo AK
+
+# Load synthetic population for Alaska:
+docker-compose run --rm localedb load pop AK
+
+# Load health data for Alaska:
+docker-compose run --rm localedb load health AK
+
+# Load weather data for years 2010 through 2020:
+docker-compose run --rm localedb load weather 2010 2020
+
+# Load vaccination data:
+docker-compose run --rm localedb load vax
+
+# Load mobility data for Alaska:
+docker-compose run --rm localedb load mobility AK
+
+# Load air traffic data for 2019 for flights traveling to Alaska (only flights with 25+ passengers):
+docker-compose run --rm localedb load airtraffic 2019 AK 25
+```
+
+Once not needed, the container can be stopped or taken down (i.e., stopped, removed, and all networks created removed):
+
+```
+docker-compose stop --timeout 300
+docker-compose down --timeout 300
+```
+
+To remove a container and also remove all the associated volumes (watch out with this one because this includes the data you have loaded!), do:
+
+```
+docker-compose down -v --timeout 300
+```
+
+### Grafana
+
+Running LocaleDB with Docker (i.e., the development environment) has the added benefit of automatically deploying a [Grafana](https://grafana.com) instance.  Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB.  By default, it runs at [`http://localhost:3000`](http://localhost:3000) so you can head there once you get the Docker container up.
+
+Currently, only the vaccination data dashboard is provided as an example.  Naturally, to be able to view any data on that dashboard, you'll need to load the data first:
+
+```
+docker-compose run --rm localedb load vax
+```
+
+To create a new dashboard, do so via the Grafana UI and export it as a `JSON` file.  Save this `JSON` file to `grafana/dashboards`.
+
+### Development with Docker
+
+Any changes to the docker image require `./build-docker.sh` to be run to update the image.  `localedb` and `localedb_man.py` are mounted as volumes, so any changes to the management and loading routines will take effect immediately.
+
+
+## Setup and Example Usage: Production Environment
 ### Command Line Management Tool
 
 On MacOS run:
@@ -73,9 +153,6 @@ sh -c "$(wget -q https://raw.githubusercontent.com/momacs/localedb/master/setup.
 Alternatively, you can run the commands from the [`setup.sh`](setup.sh) script manually.
 
 **Production environment:** For production deployment, after the installation script above has finished, edit the `$HOME/bin/localedb` script and change `is_prod=0` to `is_prod=1`.  This step is left to be done manually to ensure intent.
-
-
-## Sample Usage
 
 ### CLI
 
@@ -224,87 +301,6 @@ localedb uninstall
 ```
 
 For the list of available commands, run `localedb`.  For an explanation of each command, run `localedb help`.  Keep in mind that some commands have subcommands.
-
-
-## Docker Usage
-
-LocaleDB may be run without local installation by using Docker. First you should run:
-
-```
-## Build docker container:
-./build-docker.sh
-
-## Start Docker Postgres (may take a minute for postgres to become available):
-docker-compose up -d
-```
-
-This builds the appropriate Docker container and runs it. You should let it run for about a minute to ensure that PostGres is available before running the setup command below:
-
-```
-## Setup database:
-docker-compose run --rm localedb setup
-```
-
-You can verify that LocaleDB is running correctly by loading the vaccination data and viewing it in a Grafana dashboard:
-
-```
-## Load vaccination data:
-docker-compose run --rm localedb load vax
-```
-
-You should now be able to navigate to [`http://localhost:3000/d/D_ICxw2Gk/vax-dashboard?orgId=1`](http://localhost:3000/d/D_ICxw2Gk/vax-dashboard?orgId=1) in your browser and view a vaccination data dashboard.
-
-Next you can run normal LocaleDB commands such as:
-
-```
-## Display info:
-docker-compose run --rm localedb info all
-
-## Load disease data:
-docker-compose run --rm localedb load dis COVID-19
-
-## Load geo data:
-docker-compose run --rm localedb load geo AK
-
-## Load population data:
-docker-compose run --rm localedb load pop AK
-
-## Load health data:
-docker-compose run --rm localedb load health AK
-
-## Load weather data (provide start and stop years):
-docker-compose run --rm localedb load weather 2010 2020
-
-## Load mobility data for AK:
-docker-compose run --rm localedb load mobility AK
-
-## Load air traffic data for 2019 for flights travelling to AK filtering for flights with more than 25 passengers:
-docker-compose run --rm localedb load airtraffic 2019 AK 25
-```
-
-You can stop the containers with:
-
-```
-## Stop Docker Postgres:
-docker-compose stop --timeout 300
-docker-compose down --timeout 300
-```
-
-### Development with Docker
-
-Any changes to the docker image require `./build-docker.sh` to be run to update the image.
-
-Run `docker-compose up -d`
-`localedb` and `localedb_man.py` are mounted as volumes. So any changes will take effect immediatly
-
-`docker-compose run --rm localedb info`, edit file locally, run again and new changes will be present.
-
-
-## Grafana
-
-Running LocaleDB with Docker (see prior section) has the added benefit of automatically deploying a [Grafana](https://grafana.com/) instance alongside LocaleDB. Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB. By default, it runs at [`http://localhost:3000`](http://localhost:3000).
-
-To create a new dashboard, create it via the Grafana UI and export it as a `JSON` file. Save this `JSON` file to `grafana/dashboards` and it will be available in future sessions or for additional users if committed to this repository.
 
 
 ## References
