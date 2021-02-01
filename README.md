@@ -55,7 +55,7 @@ All that data is stratified by locale at all available levels of spatial aggrega
 
 ## Setup and Example Usage: Development/Test Environment
 
-The development environment is based around Docker so you will need to get that installed first.  After sorting that out, clone the repo and changing the working directory.  The cloned repo directory will be where all the data is stored so if you plan on loading a whole lot (looking at you, `geo` and `pop` data users), make sure you have enough space on that subtree.
+The development environment is based around Docker so you will need to get that installed first.  After sorting that out, clone the repo and change the working directory.  The cloned repo directory will be where all the data is stored so if you plan on loading a whole lot (looking at you, `geo` and `pop` data users), make sure you have enough space on that filesystem subtree.
 
 ```
 git clone https://github.com/momacs/localedb
@@ -106,14 +106,14 @@ docker-compose run --rm localedb load mobility AK
 docker-compose run --rm localedb load airtraffic 2019 AK 25
 ```
 
-Once not needed, the container can be stopped or taken down (i.e., stopped, removed, and all networks created removed):
+Once not needed any more, the container can be stopped or taken down (i.e., stopped, removed, and all networks created removed):
 
 ```
 docker-compose stop --timeout 300
 docker-compose down --timeout 300
 ```
 
-To remove a container and also remove all the associated volumes (watch out with this one because this includes the data you have loaded!), do:
+To remove a container with all associated volumes (watch out with this one because this includes the data you have loaded!), do:
 
 ```
 docker-compose down -v --timeout 300
@@ -121,7 +121,7 @@ docker-compose down -v --timeout 300
 
 ### Grafana
 
-Running LocaleDB with Docker (i.e., the development environment) has the added benefit of automatically deploying a [Grafana](https://grafana.com) instance.  Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB.  By default, it runs at [`http://localhost:3000`](http://localhost:3000) so you can head there once you get the Docker container up.
+Running LocaleDB with Docker (i.e., the development environment) has the added benefit of automatically deploying a [Grafana](https://grafana.com) instance.  Grafana provides an open source data visualization and dashboarding platform to view and analyze LocaleDB.  By default, it runs at [`http://localhost:3000`](http://localhost:3000) so head there once you get the Docker container up.
 
 Currently, only the vaccination data dashboard is provided as an example.  Naturally, to be able to view any data on that dashboard, you'll need to load the data first:
 
