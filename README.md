@@ -106,6 +106,15 @@ docker-compose run --rm localedb load mobility AK
 docker-compose run --rm localedb load airtraffic 2019 AK 25
 ```
 
+For the list of available commands, run either of the two commands:
+
+```
+docker-compose run --rm localedb
+docker-compose run --rm localedb help
+```
+
+Keep in mind that some commands have subcommands.
+
 Once not needed any more, the container can be stopped or taken down (i.e., stopped, removed, and all networks created removed):
 
 ```
