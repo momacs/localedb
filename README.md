@@ -106,7 +106,7 @@ docker-compose run --rm localedb load mobility AK
 docker-compose run --rm localedb load airtraffic 2019 AK 25
 ```
 
-For the list of available commands, run either of the two commands:
+For the list of available commands, run either of the two:
 
 ```
 docker-compose run --rm localedb
