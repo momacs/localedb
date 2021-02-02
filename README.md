@@ -122,7 +122,7 @@ docker-compose stop --timeout 300
 docker-compose down --timeout 300
 ```
 
-To remove a container with all associated volumes (watch out with this one because this includes the data you have loaded!), do:
+To remove the container with all associated volumes (watch out with this one because this includes the data you have loaded!), do:
 
 ```
 docker-compose down -v --timeout 300
