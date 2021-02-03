@@ -9,6 +9,7 @@ import time
 import numpy as np
 import urllib.request
 from zipfile import ZipFile as zp
+import ssl
 
 
 def timestamp(x, year):
@@ -132,11 +133,11 @@ def airtraffic(year, state, min_pax):
     raw_data_inter = f"UserTableName=T_100_International_Market__All_Carriers&DBShortName=Air_Carriers&RawDataTable=T_T100I_MARKET_ALL_CARRIER&sqlstr=+SELECT+PASSENGERS%2CFREIGHT%2CMAIL%2CDISTANCE%2CUNIQUE_CARRIER%2CAIRLINE_ID%2CUNIQUE_CARRIER_NAME%2CUNIQUE_CARRIER_ENTITY%2CREGION%2CCARRIER%2CCARRIER_NAME%2CCARRIER_GROUP%2CCARRIER_GROUP_NEW%2CORIGIN_AIRPORT_ID%2CORIGIN_AIRPORT_SEQ_ID%2CORIGIN_CITY_MARKET_ID%2CORIGIN%2CORIGIN_CITY_NAME%2CORIGIN_COUNTRY%2CORIGIN_COUNTRY_NAME%2CORIGIN_WAC%2CDEST_AIRPORT_ID%2CDEST_AIRPORT_SEQ_ID%2CDEST_CITY_MARKET_ID%2CDEST%2CDEST_CITY_NAME%2CDEST_COUNTRY%2CDEST_COUNTRY_NAME%2CDEST_WAC%2CYEAR%2CQUARTER%2CMONTH%2CDISTANCE_GROUP%2CCLASS+FROM++T_T100I_MARKET_ALL_CARRIER+WHERE+YEAR%3D{year}&varlist=PASSENGERS%2CFREIGHT%2CMAIL%2CDISTANCE%2CUNIQUE_CARRIER%2CAIRLINE_ID%2CUNIQUE_CARRIER_NAME%2CUNIQUE_CARRIER_ENTITY%2CREGION%2CCARRIER%2CCARRIER_NAME%2CCARRIER_GROUP%2CCARRIER_GROUP_NEW%2CORIGIN_AIRPORT_ID%2CORIGIN_AIRPORT_SEQ_ID%2CORIGIN_CITY_MARKET_ID%2CORIGIN%2CORIGIN_CITY_NAME%2CORIGIN_COUNTRY%2CORIGIN_COUNTRY_NAME%2CORIGIN_WAC%2CDEST_AIRPORT_ID%2CDEST_AIRPORT_SEQ_ID%2CDEST_CITY_MARKET_ID%2CDEST%2CDEST_CITY_NAME%2CDEST_COUNTRY%2CDEST_COUNTRY_NAME%2CDEST_WAC%2CYEAR%2CQUARTER%2CMONTH%2CDISTANCE_GROUP%2CCLASS&grouplist=&suml=&sumRegion=&filter1=title%3D&filter2=title%3D&geo=All%A0&time=All%A0Months&timename=Month&GEOGRAPHY=All&XYEAR={year}&FREQUENCY=All&AllVars=All&VarName=PASSENGERS&VarDesc=Passengers&VarType=Num&VarName=FREIGHT&VarDesc=Freight&VarType=Num&VarName=MAIL&VarDesc=Mail&VarType=Num&VarName=DISTANCE&VarDesc=Distance&VarType=Num&VarName=UNIQUE_CARRIER&VarDesc=UniqueCarrier&VarType=Char&VarName=AIRLINE_ID&VarDesc=AirlineID&VarType=Num&VarName=UNIQUE_CARRIER_NAME&VarDesc=UniqueCarrierName&VarType=Char&VarName=UNIQUE_CARRIER_ENTITY&VarDesc=UniqCarrierEntity&VarType=Char&VarName=REGION&VarDesc=CarrierRegion&VarType=Char&VarName=CARRIER&VarDesc=Carrier&VarType=Char&VarName=CARRIER_NAME&VarDesc=CarrierName&VarType=Char&VarName=CARRIER_GROUP&VarDesc=CarrierGroup&VarType=Num&VarName=CARRIER_GROUP_NEW&VarDesc=CarrierGroupNew&VarType=Num&VarName=ORIGIN_AIRPORT_ID&VarDesc=OriginAirportID&VarType=Num&VarName=ORIGIN_AIRPORT_SEQ_ID&VarDesc=OriginAirportSeqID&VarType=Num&VarName=ORIGIN_CITY_MARKET_ID&VarDesc=OriginCityMarketID&VarType=Num&VarName=ORIGIN&VarDesc=Origin&VarType=Char&VarName=ORIGIN_CITY_NAME&VarDesc=OriginCityName&VarType=Char&VarName=ORIGIN_COUNTRY&VarDesc=OriginCountry&VarType=Char&VarName=ORIGIN_COUNTRY_NAME&VarDesc=OriginCountryName&VarType=Char&VarName=ORIGIN_WAC&VarDesc=OriginWac&VarType=Num&VarName=DEST_AIRPORT_ID&VarDesc=DestAirportID&VarType=Num&VarName=DEST_AIRPORT_SEQ_ID&VarDesc=DestAirportSeqID&VarType=Num&VarName=DEST_CITY_MARKET_ID&VarDesc=DestCityMarketID&VarType=Num&VarName=DEST&VarDesc=Dest&VarType=Char&VarName=DEST_CITY_NAME&VarDesc=DestCityName&VarType=Char&VarName=DEST_COUNTRY&VarDesc=DestCountry&VarType=Char&VarName=DEST_COUNTRY_NAME&VarDesc=DestCountryName&VarType=Char&VarName=DEST_WAC&VarDesc=DestWac&VarType=Num&VarName=YEAR&VarDesc=Year&VarType=Num&VarName=QUARTER&VarDesc=Quarter&VarType=Num&VarName=MONTH&VarDesc=Month&VarType=Num&VarName=DISTANCE_GROUP&VarDesc=DistanceGroup&VarType=Num&VarName=CLASS&VarDesc=Class&VarType=Char"
     # DOMESTIC Get file name of zip file to be downloaded
     url_dom = "https://www.transtats.bts.gov/DownLoad_Table.asp?Table_ID=258&Has_Group=3&Is_Zipped=0"
-    response = requests.post(url_dom, headers=headers, data=raw_data_dom)
+    response = requests.post(url_dom, headers=headers, data=raw_data_dom, verify=False)
     url_dom = response.url
     # International Get file name of zip file to be downloaded
     url_inter = "https://www.transtats.bts.gov/DownLoad_Table.asp?Table_ID=260&Has_Group=3&Is_Zipped=0"
-    response = requests.post(url_inter, headers=headers, data=raw_data_inter)
+    response = requests.post(url_inter, headers=headers, data=raw_data_inter, verify=False)
     url_inter = response.url
 
     # Download and unzip the zip file
@@ -148,6 +149,11 @@ def airtraffic(year, state, min_pax):
     urls = [url_dom, url_inter]
 
     files_to_unzip = []
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
     for url in urls:
 
         zip_file = url.split("/")[-1].split(".")[0]
@@ -157,12 +163,14 @@ def airtraffic(year, state, min_pax):
         tries = 0
         while not downloaded:
             try:
-                remote = urllib.request.urlopen(url)
+                print(f"Downloading from {url}")
+                remote = urllib.request.urlopen(url, context=ctx)
                 data = remote.read()
                 remote.close()
                 downloaded = True
-            except:
-                print("WARNING: failed to download air traffic data. Retrying...") 
+            except Exception as e:
+                print("WARNING: failed to download air traffic data. Retrying...")
+                print(f"ERROR: {e}") 
                 tries += 1
                 time.sleep(60)
             if tries == 2:
