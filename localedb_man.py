@@ -243,13 +243,12 @@ class DiseaseSchema(Schema):
         for (i,r) in enumerate(rows):
             if is_glob:
                 c.execute(f'SELECT id FROM {self.dbi.pg_schema_main}.locale WHERE admin0 IS NOT DISTINCT FROM %s AND admin1 IS NOT DISTINCT FROM %s AND admin2 IS NULL;', [r[1], r[0]])
-            else:
+            else:                
                 c.execute(f'SELECT id FROM {self.dbi.pg_schema_main}.locale WHERE id = %s;', [r[0]])
             locale_id = c.fetchone()
             if locale_id is None:
                 print(f'Locale not been found in the database: {r[:7]}')
-                self.dbi.conn.rollback()
-                sys.exit(1)
+                continue
             locale_id = locale_id[0]
 
             psycopg2.extras.execute_batch(c,
@@ -350,8 +349,8 @@ class MainSchema(Schema):
         with self.dbi.conn.cursor() as c:
             c.execute(f'DELETE FROM {self.dbi.pg_schema_main}.locale;')
             psycopg2.extras.execute_batch(c,
-                f'INSERT INTO {self.dbi.pg_schema_main}.locale (iso2, iso3, iso_num, fips, admin0, admin1, admin2, lat, long, pop) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);',
-                ((r[1], r[2], r[3], r[4], r[7], r[6], r[5], r[8], r[9], r[11]) for r in rows)
+                f'INSERT INTO {self.dbi.pg_schema_main}.locale (id, iso2, iso3, iso_num, fips, admin0, admin1, admin2, lat, long, pop) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);',
+                ((r[0], r[1], r[2], r[3], r[4], r[7], r[6], r[5], r[8], r[9], r[11]) for r in rows)
             )
         self.dbi.conn.commit()
         self.dbi.vacuum(f'{self.dbi.pg_schema_main}.locale')
@@ -1230,21 +1229,23 @@ class MobilitySchema(Schema):
         orig_na_sub = orig_na[['origin_admin0', 'origin_admin1']].rename(columns={'origin_admin0': 'admin0', 'origin_admin1': 'admin1'})
         dest_na_sub = dest_na[['dest_admin0', 'dest_admin1']].rename(columns={'dest_admin0': 'admin0', 'dest_admin1': 'admin1'})
         df_na = orig_na_sub.append(dest_na_sub)
-        df_na = df_na.drop_duplicates()
+        df_na = df_na.drop_duplicates()   
 
         # obtain future IDs...
         cur = self.dbi.conn.cursor()
-        cur.execute("select max(id) from main.locale;")
+        cur.execute("select max(id) from main.locale where id >= 9000000 and id <= 9999999;")
         max_id = cur.fetchone()[0]
-        print(f"Current max id in locales table is..{max_id}")
+        if not max_id:
+            max_id = 9000000
+        print(f"Current max id in locales table is {max_id}")
         df_na['locale_id'] = np.arange(max_id + 1, max_id + 1 + len(df_na))
         print("Adding the following discovered locales...")
         print(df_na.head())
 
         cur = self.dbi.conn.cursor()
         for index, row in df_na.iterrows():
-            sql = 'insert into main.locale (admin0, admin1) values (%s, %s)'
-            cur.execute(sql, (row['admin0'], row['admin1']))
+            sql = 'insert into main.locale (id, admin0, admin1) values (%s, %s, %s)'
+            cur.execute(sql, (row['locale_id'], row['admin0'], row['admin1']))
         self.dbi.conn.commit()
 
         orig_na_fixed = self.geo_merge(orig_na, df_na, 'origin')
@@ -1268,12 +1269,13 @@ class MobilitySchema(Schema):
         return
 
     def load_airtraffic(self,year, state, min_pax):
-        print("Updating airtraffic schema...")
-        cmd = airtraffic.add_columns()
-        self.engine.execute(cmd)
         print(f"Loading air traffic data for {year} for {state} filtering for {min_pax} minimum passengers per flight...")
         df = airtraffic.airtraffic(year, state, int(min_pax))
         print(df.head())
+
+        print("Updating airtraffic schema...")
+        cmd = airtraffic.add_columns()
+        self.engine.execute(cmd)
         try:
             df.to_sql('airtraffic', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
             success = True
