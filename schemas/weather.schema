@@ -5,13 +5,13 @@ DROP SCHEMA IF EXISTS $PG_SCHEMA CASCADE;
 CREATE SCHEMA $PG_SCHEMA_WEATHER;
 
 CREATE TABLE $PG_SCHEMA_WEATHER.weather (
-locale_id  INTEGER NOT NULL,
-year       INTEGER NOT NULL,
-month      INTEGER NOT NULL,
-tmin       DECIMAL,
-tavg       DECIMAL,
-tmax       DECIMAL,
-precip     DECIMAL
+locale_id INTEGER NOT NULL,
+year      INTEGER NOT NULL,
+month     INTEGER NOT NULL,
+tmin      DECIMAL,
+tavg      DECIMAL,
+tmax      DECIMAL,
+precip    DECIMAL
 );
 
 COMMIT;

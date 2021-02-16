@@ -5,24 +5,24 @@ DROP SCHEMA IF EXISTS $PG_SCHEMA_HEALTH CASCADE;
 CREATE SCHEMA $PG_SCHEMA_HEALTH;
 
 CREATE TABLE $PG_SCHEMA_HEALTH.measures (
-id           INTEGER PRIMARY KEY,
-name         TEXT NOT NULL,
-description  TEXT NOT NULL
+id          INTEGER PRIMARY KEY,
+name        TEXT NOT NULL,
+description TEXT NOT NULL
 );
 
 CREATE TABLE $PG_SCHEMA_HEALTH.health (
-locale_id       INTEGER NOT NULL REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
-measure_id      INTEGER REFERENCES $PG_SCHEMA_HEALTH.measures (id) ON DELETE CASCADE ON UPDATE CASCADE,
-start_year      INTEGER NOT NULL,
-end_year        INTEGER NOT NULL,
-numerator       DECIMAL,
-denominator     DECIMAL,
-rawvalue        DECIMAL,
-cilow           DECIMAL,
-cihigh          DECIMAL,
-chrreleaseyear  INTEGER,
-differflag      BOOLEAN,
-trendbreak      BOOLEAN
+locale_id      INTEGER NOT NULL REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
+measure_id     INTEGER REFERENCES $PG_SCHEMA_HEALTH.measures (id) ON DELETE CASCADE ON UPDATE CASCADE,
+start_year     INTEGER NOT NULL,
+end_year       INTEGER NOT NULL,
+numerator      DECIMAL,
+denominator    DECIMAL,
+rawvalue       DECIMAL,
+cilow          DECIMAL,
+cihigh         DECIMAL,
+chrreleaseyear INTEGER,
+differflag     BOOLEAN,
+trendbreak     BOOLEAN
 );
 
 COMMIT;
