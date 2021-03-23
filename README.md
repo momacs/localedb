@@ -12,7 +12,7 @@ Many models of COVID-19 have been proposed to date.  When compared against each 
 
 As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extensions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The database can be accessed either via a PostgreSQL driver or a language-specific binding which provide a high level API to, for example, suggest U.S. counties similar to the county specified.  To that effect, we are currently working on [Python](https://github.com/momacs/localedb-py) bindings.
 
-<center><img height="526" alt="portfolio_view" src="https://raw.githubusercontent.com/momacs/localedb/6938209e19ac914bbf16b538c771a8824b4e24ad/media/design.png" /></center>
+<center><img height="526" alt="portfolio_view" src="https://raw.githubusercontent.com/momacs/localedb/master/media/design.png" /></center>
 
 This design that separates data management and data consumption reflects the anticipated production use case.  Namely, the database will be deployed and set up once and will then require little to no manual management (periodic updates will be autonomous).  It will then be used for producing data that will drive modeling and simulation efforts.
 
@@ -192,11 +192,12 @@ To display filesystem information, run:
 $ localedb info fs
 Directory structure
     Root               /Users/tomek/.localedb         43M
-    Runtime            /Users/tomek/.localedb/rt      0B
+    Data: Disease      /Users/tomek/.localedb/dl/dis  0B
+    Data: Geographic   /Users/tomek/.localedb/dl/geo  0B
+    Data: Population   /Users/tomek/.localedb/dl/pop  0B
+    Log                /Users/tomek/.localedb/log     0B
     PostgreSQL data    /Users/tomek/.localedb/pg      43M
-    Disease data       /Users/tomek/.localedb/dl/dis  0B
-    Geographic data    /Users/tomek/.localedb/dl/geo  0B
-    Population data    /Users/tomek/.localedb/dl/pop  0B
+    Runtime            /Users/tomek/.localedb/rt      0B
 ```
 
 To import COVID-19 disease data (currently only dynamics and non-pharmaceutical interventions), run:
