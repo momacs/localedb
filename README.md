@@ -336,7 +336,7 @@ For the list of available commands, run `localedb`.  For an explanation of each 
 
 ### Data Sources
 
-- [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
+- [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at JHU](https://github.com/CSSEGISandData/COVID-19)
 - [Covid ActNow](https://covidactnow.org/data-api)
 - [2010 U.S. Synthesized Population Dataset](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
 - [US Census Bureau: TIGER/Line Shapefiles (2010)](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.2010.html)
