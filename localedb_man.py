@@ -834,17 +834,25 @@ class HealthSchema(Schema):
 
 # ----------------------------------------------------------------------------------------------------------------------
 class WeatherSchema(Schema):
-    """The major parameters in this file are sequential climatic county monthly maximum, minimum and average temperature (deg. F. to 10ths) and precipitation (inches to 100ths). Period of record is 1895 through latest month available, updated monthly.
+    """The major parameters in this file are sequential climatic county monthly maximum, minimum and average
+    temperature (deg. F. to 10ths) and precipitation (inches to 100ths). Period of record is 1895 through latest month
+    available, updated monthly.
 
-        Values from the most recent two calendar years will be updated on a monthly basis. Period of record updates will occur when the underlying data set undergoes a version change.
+    Values from the most recent two calendar years will be updated on a monthly basis. Period of record updates will
+    occur when the underlying data set undergoes a version change.
 
-        METHODOLOGY:
+    Methodology:
+    - County values in nClimDiv were derived from area-weighted averages of grid-point estimates interpolated from
+      station data. A nominal grid resolution of 5 km was used to ensure that all divisions had sufficient spatial
+      sampling (only four small divisions had less than 100 points) and because the impact of elevation on
+      precipitation is minimal below 5 km. Station data were gridded via climatologically aided interpolation to
+      minimize biases from topographic and network variability.
+    - The Global Historical Climatology Network (GHCN) Daily dataset is the source of station data for nClimDiv.
+      GHCN-Daily contains several major observing networks in North America, five of which are used here. The primary
+      network is the National Weather Service (NWS) Cooperative Observing (COOP) program, which consists of stations
+      operated by volunteers as well as by agencies such as the Federal Aviation Administration.
 
-        County values in nClimDiv were derived from area-weighted averages of grid-point estimates interpolated from station data. A nominal grid resolution of 5 km was used to ensure that all divisions had sufficient spatial sampling (only four small divisions had less than 100 points) and because the impact of elevation on precipitation is minimal below 5 km. Station data were gridded via climatologically aided interpolation to minimize biases from topographic and network variability.
-
-        The Global Historical Climatology Network (GHCN) Daily dataset is the source of station data for nClimDiv. GHCN-Daily contains several major observing networks in North America, five of which are used here. The primary network is the National Weather Service (NWS) Cooperative Observing (COOP) program, which consists of stations operated by volunteers as well as by agencies such as the Federal Aviation Administration.
-
-        Data is updated monthly.
+    Data is updated monthly.
     """
 
     def countdown(self, t):
@@ -858,18 +866,17 @@ class WeatherSchema(Schema):
     def download_noaa(self, max_tries, min_delay, max_delay):
         i = 1
         while i <= max_tries:
-
             try:
                 # Download (TO WRKDIR) 4 county weather files from NOAA ftp
-                ftp = FTP('ftp.ncdc.noaa.gov') # ftp access to ncdc.noaa.gov
-                ftp.login()                     # anonymous ftp login
+                ftp = FTP('ftp.ncdc.noaa.gov')   # ftp access to ncdc.noaa.gov
+                ftp.login()                      # anonymous ftp login
                 ftp.cwd('pub/data/cirs/climdiv') # change directory
 
                 # Get all the files on the ftp page and Filter to only the 4 county files
                 dirs = ftp.nlst()
                 description_files = [i for i in dirs if len(i.split('.'))>1]
 
-                #Delete any partial downloads
+                # Delete any partial downloads
                 for file in description_files:
                     if os.path.exists(file):
                         os.remove(file)
@@ -877,8 +884,7 @@ class WeatherSchema(Schema):
 
                 files_to_download = []
                 for file in description_files:
-
-                    if "climdiv-pcpncy" in file or "climdiv-tmaxcy" in file or "climdiv-tmincy"in file or "climdiv-tmpccy" in file:
+                    if "climdiv-pcpncy" in file or "climdiv-tmaxcy" in file or "climdiv-tmincy" in file or "climdiv-tmpccy" in file:
                         files_to_download.append(file)
 
                 for file in files_to_download:
@@ -897,10 +903,8 @@ class WeatherSchema(Schema):
             except Exception as e:
                 print(f'Exception: {e}')
                 if i <= max_tries:
-
                     sleep_time = rd.randint(min_delay, max_delay)
                     self.countdown(sleep_time)
-
                     continue
 
                 else:
@@ -910,7 +914,6 @@ class WeatherSchema(Schema):
         return files_to_download
 
     def year_filter(self,df, yr_filter_str):
-
         df['year'] = df.noaa_code.apply(lambda x: x[-4:])
         df = df[~df["year"].str.contains('|'.join(yr_filter_str))]
         df = df.reset_index(drop=True)
@@ -921,9 +924,8 @@ class WeatherSchema(Schema):
 
     # readin NOAA data and apply year filter
     def read_filter_data(self, file):
-
         fn = file.split("/")[-1]
-        print(f'Reading:    {fn}')
+        print(f'Reading:     {fn}')
 
         names = ['noaa_code',1,2,3,4,5,6,7,8,9,10,11,12]
         df = pd.read_csv(file, delim_whitespace=True,
@@ -933,14 +935,13 @@ class WeatherSchema(Schema):
                          header=None)
 
         # Filter by selected years:
-        print(f"Filtering:  {fn}")
+        print(f"Filtering:   {fn}")
         df = self.year_filter(df, self.yr_filter_str)
 
         return df
 
     # pivot wx data from column to row
     def restack_df(self, df,fn):
-
         if fn == "01":
             wx = "precipitation"
         if fn == "02":
@@ -950,17 +951,13 @@ class WeatherSchema(Schema):
         if fn == "28":
             wx = "Tmin"
 
-        df = pd.DataFrame(df.set_index('noaa_code')\
-                          .stack())\
-                          .reset_index()\
-                          .rename(columns={'level_1': 'month', 0: wx})
+        df = pd.DataFrame(df.set_index('noaa_code').stack()).reset_index().rename(columns={'level_1': 'month', 0: wx})
         return df
 
     # Build full census FIPS to add to df
     def census_fip(self, row):
         county_fip = row.noaa_fips[-3:]
         census_fips = row.census_state_fips + county_fip
-
         return census_fips
 
     # Remove "County" from county name
@@ -979,13 +976,12 @@ class WeatherSchema(Schema):
         """
         Gets FIPS lookup data
         """
-        print("Downloading FIPS lookups")
+        print("Downloading: FIPS lookups")
         urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/noaa_fips.txt', 'noaa_fips.txt')
         urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/noaa_states.txt', 'noaa_states.txt')
         urllib.request.urlretrieve('https://raw.githubusercontent.com/jataware/ASKE-weather/main/noaa_to_census/state_fips.txt', 'state_fips.txt')
-        print("Downloading NOAA data")
+        print("Downloading: NOAA data")
         files_to_download = self.download_noaa(5, 30, 60)
-
 
     def get_locales(self, df):
         locale_df = pd.read_sql("SELECT id, fips FROM main.locale where admin0='US'", self.engine)
@@ -993,7 +989,6 @@ class WeatherSchema(Schema):
         df = df.rename(columns = {'id': 'locale_id'})
         del(df['fips'])
         return df
-
 
     def process_noaa(self, start_year, stop_year):
         # Build transform from noaa state fips to census fips
@@ -1049,13 +1044,11 @@ class WeatherSchema(Schema):
             state_abbr = key
             transformer[noaa] = [census, state_abbr]
 
-
         # Filter to year range user requested:
         base_years = [i for i in range(1895, 2021)]
         user_years = [i for i in range(int(start_year), int(stop_year) +1)]
         yr_filter = set(base_years) ^ set(user_years)
         self.yr_filter_str = [str(i) for i in yr_filter]
-
 
         # Back-up if ftp site fails; must have these files already in the directory
         files_to_download=["climdiv-pcpncy-v1.0.0-20201104",
@@ -1063,27 +1056,22 @@ class WeatherSchema(Schema):
                            "climdiv-tmincy-v1.0.0-20201104",
                            "climdiv-tmpccy-v1.0.0-20201104"]
 
-        starter = f"{os.getcwd()}/"
-        files = [starter + file for file in files_to_download]
+        # starter = f"{os.getcwd()}/"
+        # files = [starter + file for file in files_to_download]
+        files = [os.path.join(os.getcwd(), fname) for fname in files_to_download]
 
         # Read in and filter NOAA data
         df_list = []
         for file in files:
-
             df_list.append(self.read_filter_data(file))
 
         # restack wx data column-to-row
         df_stack = []
         for df in df_list:
-
             fn = df.noaa_code.iloc[0][5:7]
-
             df_ = self.restack_df(df,fn)
-
             df_ = df_[~df_['noaa_code'].astype(str).str.startswith('50')]
-
             df_['noaa_fips'] = df_.noaa_code.apply(lambda x: x[:5])
-
             df_stack.append(df_)
 
         # Convert NOAA to Census FIPS
@@ -1092,7 +1080,6 @@ class WeatherSchema(Schema):
 
         df_aug = []
         for df in df_stack:
-
             df_ = df.join(noaa_fips.set_index('noaa_fips'), how='left', on='noaa_fips')
             df_['noaa_state_fips'] = df_.noaa_fips.apply(lambda x: x[:2])
             df_ = df_.join(transformer_df, how='left', on='noaa_state_fips')
@@ -1126,12 +1113,14 @@ class WeatherSchema(Schema):
         res = self.get_locales(res)
         return res
 
-
     def load_weather(self, start_year, stop_year):
         """
         Loads Flu vaccine data to database.
         Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
         """
+
+        os.chdir(self.fsi.dpath_rt)
+
         print(f"Loading NOAA data from {start_year} through {stop_year} (inclusive)")
         self.get_files()
         weather = self.process_noaa(start_year, stop_year)
