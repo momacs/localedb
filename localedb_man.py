@@ -13,12 +13,14 @@ import psycopg2
 import psycopg2.extras
 import random as rd
 import re
+import requests
 import sys
 import time
 import urllib.request
 
 from abc             import ABC
 from collections     import namedtuple
+from glob            import glob
 from ftplib          import FTP
 from pathlib         import Path
 from psycopg2.errors import UniqueViolation
@@ -27,6 +29,8 @@ from sqlalchemy.exc  import IntegrityError
 
 sys.path.append('/usr/share/localedb/scripts')
 import airtraffic
+
+requests.packages.urllib3.disable_warnings()
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1051,13 +1055,12 @@ class WeatherSchema(Schema):
         self.yr_filter_str = [str(i) for i in yr_filter]
 
         # Back-up if ftp site fails; must have these files already in the directory
-        files_to_download=["climdiv-pcpncy-v1.0.0-20201104",
-                           "climdiv-tmaxcy-v1.0.0-20201104",
-                           "climdiv-tmincy-v1.0.0-20201104",
-                           "climdiv-tmpccy-v1.0.0-20201104"]
+        # files_to_download=["climdiv-pcpncy-v1.0.0-20201104",
+        #                    "climdiv-tmaxcy-v1.0.0-20201104",
+        #                    "climdiv-tmincy-v1.0.0-20201104",
+        #                    "climdiv-tmpccy-v1.0.0-20201104"]
+        files_to_download = glob("climdiv*")
 
-        # starter = f"{os.getcwd()}/"
-        # files = [starter + file for file in files_to_download]
         files = [os.path.join(os.getcwd(), fname) for fname in files_to_download]
 
         # Read in and filter NOAA data
@@ -1218,7 +1221,7 @@ class MobilitySchema(Schema):
         for col in cols:
             df[col]= df[col].astype(int)
 
-        renamed_cols = ['dt', 'fips','pop_home',
+        renamed_cols = ['ts', 'fips','pop_home',
                     'pop_mobile', 'n_trips',
                     'n_trips_lt_1', 'n_trips_1_3', 'n_trips_3_5',
                     'n_trips_5_10', 'n_trips_10_25',
@@ -1237,12 +1240,12 @@ class MobilitySchema(Schema):
         Loads Flu vaccine data to database.
         Uses Pandas and SQLAlchemy. If the data is already in the database, it alerts the user.
         """
-        print("\nDownloading mobility data...")
+        print("Downloading mobility data...", end='', flush=True)
         download_url = 'https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD'
         urllib.request.urlretrieve(download_url, 'Trips_by_Distance.csv')
-        print("...download complete!\nProcessing data...")
+        print("...done\nProcessing data...", end='', flush=True)
         mobility = self.process_mobility(state)
-        print("...data processing complete!\nSample:\n")
+        print("...done\nSample:")
         print(mobility.head())
         try:
             mobility.to_sql('mobility', con=self.engine, schema=self.dbi.pg_schema_mobility, index=False, if_exists='append')
