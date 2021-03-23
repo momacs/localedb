@@ -36,6 +36,7 @@ services:
     volumes:
       - vol_data:/usr/share/localedb/data
       - vol_log:/usr/share/localedb/log
+      - vol_rt:/usr/share/localedb/rt
       - vol_schemas:/usr/share/localedb/schemas
       - ${PWD}/localedb_man.py:/usr/share/localedb/bin/localedb_man.py
       - ${PWD}/scripts/:/usr/share/localedb/scripts/
@@ -59,6 +60,12 @@ volumes:
     driver_opts:
       type: volume
       device: ${PWD}/.localedb/pg
+      o: bind
+  vol_rt:
+    driver: local
+    driver_opts:
+      type: volume
+      device: ${PWD}/.localedb/rt
       o: bind
   vol_schemas:
     driver: local

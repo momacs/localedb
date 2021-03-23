@@ -22,7 +22,7 @@ This design that separates data management and data consumption reflects the ant
 As depicted on the figure above, the current projection is for LocaleDB to contain the following data types:
 
 - **Disease dynamics** (e.g., number of confirmed cases)
-- **Clinical** (e.g., R0, incubation period, proportion of asymptomatic cases, etc.)
+- **Clinical** (e.g., hospital and ICU beds, R0, test results, vaccinations statistics, etc.)
 - **Non-pharmaceutical interventions** (**NPIs**; e.g., dates of stay-at-home order)
 - **Medical countermeasures** (**MCMs**; e.g., vaccine availability, efficacy, and allocation strategies)
 - **Population** (e.g., households, their incomes, age of people, etc.)
@@ -34,6 +34,13 @@ As depicted on the figure above, the current projection is for LocaleDB to conta
 - **Meteorological** (e.g., monthly temperature and precipitation)
 
 All that data is stratified by locale at all available levels of spatial aggregation (e.g., country, state, county, tract, block group, block).  In terms of temporal resolution, the highest frequency with which processes are sampled/measured is the goal.  For example, disease dynamics is represented as a time series of daily numbers of confirmed cases and deaths, while health factors and outcomes are encoded with far fewer time steps.
+
+
+### External Data Source Registration
+
+The following data types require separate registration to obtain an API key.  That registration is only necessary if the corresponding data type is desired.
+
+- Clinical: [Covid ActNow](https://covidactnow.org/data-api)
 
 
 ## Dependencies
@@ -81,8 +88,11 @@ Displaying info and loading data is done using the following commands:
 # Display info:
 docker-compose run --rm localedb info all
 
-# Load disease data for COVID-19:
+# Load COVID-19 disease dynamics data:
 docker-compose run --rm localedb load dis COVID-19
+
+# Load Alaska COVID-19 clinical data (beds, tests, r0, etc.; run after the previous command):
+docker-compose run --rm localedb load clinic AK <covid-actnow-api-key>
 
 # Load Alaska geographic and cartographic data:
 docker-compose run --rm localedb load geo AK
@@ -103,7 +113,7 @@ docker-compose run --rm localedb load vax
 docker-compose run --rm localedb load mobility AK
 
 # Load air traffic data for 2019 for flights traveling to Alaska (only flights with 25+ passengers):
-docker-compose run --rm localedb load airtraffic 2019 AK 25
+docker-compose run --rm localedb load air-traffic 2019 AK 25
 ```
 
 For the list of available commands, run either of the two:
@@ -146,6 +156,9 @@ Any changes to the docker image require `./build-docker.sh` to be run to update 
 
 
 ## Setup and Example Usage: Production Environment
+
+Production environment (which is based on a local PostgreSQL server) isn't supported yet.  Please use Dockerized deployment discussed above for now.
+
 ### Command Line Management Tool
 
 On MacOS run:
@@ -189,7 +202,7 @@ Directory structure
 To import COVID-19 disease data (currently only dynamics and non-pharmaceutical interventions), run:
 
 ```
-$ localedb import dis c19
+$ localedb load dis COVID-19
 Disease dynamics
     Loading global confirmed... done (11 s)
     Loading global deaths... done (14 s)
@@ -199,6 +212,12 @@ Disease dynamics
     Consolidating... done (88 s)
 Non-pharmaceutical interventions
     Loading Keystone... done (14 s)
+```
+
+```
+$ localedb load clinic AK <covid-actnow-api-key>
+Downloading... done (19 s)
+Processing... done (100 s; n=12321)
 ```
 
 To see some basic database statistics, run:
@@ -265,10 +284,10 @@ To import mobility data for Alaska run:
 $ localedb load mobility AK
 ```
 
-To import air traffic data for 2019 for flights travelling to Alaska which had more than 25 passengers run:
+To import air traffic data for 2019 for flights traveling to Alaska which had more than 25 passengers run:
 
 ```
-$ localedb load airtraffic 2019 AK 25
+$ localedb load air-traffic 2019 AK 25
 ```
 
 To import synthetic population data, run:
@@ -317,13 +336,14 @@ For the list of available commands, run `localedb`.  For an explanation of each 
 ### Data Sources
 
 - [COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19)
+- [Covid ActNow](https://covidactnow.org/data-api)
+- [2010 U.S. Synthesized Population Dataset](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
+- [US Census Bureau: TIGER/Line Shapefiles (2010)](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.2010.html)
 - [CDC: Influenza Vaccination Coverage](https://www.cdc.gov/flu/fluvaxview/index.htm)
 - [County Health Rankings and Roadmaps](https://www.countyhealthrankings.org/explore-health-rankings/rankings-data-documentation)
 - [Bureau of Transportation Statistics: Airlines and Airports](https://www.bts.gov/topics/airlines-and-airports-0)
 - [NOAA nClimDiv](https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00005)
 - [Keystone: COVID-19 Intervention Data](https://github.com/Keystone-Strategy/covid19-intervention-data)
-- [2010 U.S. Synthesized Population Dataset](https://gitlab.com/momacs/dataset-pop-us-2010-midas)
-- [US Census Bureau: TIGER/Line Shapefiles (2010)](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.2010.html)
 
 
 ## License

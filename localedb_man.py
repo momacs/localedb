@@ -48,19 +48,19 @@ class DBI(object):
     """
 
     def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, cursor_factory=psycopg2.extras.NamedTupleCursor):
-        self.pg_host        = pg_host
-        self.pg_port        = pg_port
-        self.pg_usr         = pg_usr
-        self.pg_pwd         = pg_pwd
-        self.pg_db          = pg_db
-        self.pg_schema_dis  = pg_schema_dis
-        self.pg_schema_geo  = pg_schema_geo
-        self.pg_schema_main = pg_schema_main
-        self.pg_schema_pop  = pg_schema_pop
-        self.pg_schema_vax  = pg_schema_vax
-        self.pg_schema_health  = pg_schema_health
+        self.pg_host            = pg_host
+        self.pg_port            = pg_port
+        self.pg_usr             = pg_usr
+        self.pg_pwd             = pg_pwd
+        self.pg_db              = pg_db
+        self.pg_schema_dis      = pg_schema_dis
+        self.pg_schema_geo      = pg_schema_geo
+        self.pg_schema_main     = pg_schema_main
+        self.pg_schema_pop      = pg_schema_pop
+        self.pg_schema_vax      = pg_schema_vax
+        self.pg_schema_health   = pg_schema_health
         self.pg_schema_weather  = pg_schema_weather
-        self.pg_schema_mobility  = pg_schema_mobility
+        self.pg_schema_mobility = pg_schema_mobility
 
         self.conn = psycopg2.connect(host=self.pg_host, port=self.pg_port, user=self.pg_usr, password=self.pg_pwd, database=self.pg_db, cursor_factory=cursor_factory)
 
@@ -110,9 +110,10 @@ class FSI(object):
     """Filesystem interface.
     """
 
-    def __init__(self, dpath_log, dpath_rt):
-        self.dpath_log = Path(dpath_log)
-        self.dpath_rt  = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
+    def __init__(self, dpath_data, dpath_log, dpath_rt):
+        self.dpath_data = Path(dpath_data)
+        self.dpath_log  = Path(dpath_log)
+        self.dpath_rt   = Path(dpath_rt)  # runtime dir assumed to contain the source files uncompressed and ready for processing
 
         self.log = None  # log file; open upon request elsewhere
 
@@ -162,6 +163,8 @@ class DiseaseSchema(Schema):
     Data sources
         Disease dynamics
             COVID-19: https://github.com/CSSEGISandData/COVID-19
+        CovidActNow
+            Same start date as JHU (2021.01.22)
         Vaccinations
             2010-11 through 2018-19 Influenza Seasons Vaccination Coverage Trend Report
                 https://www.cdc.gov/flu/fluvaxview/reportshtml/trends/index.html
@@ -189,6 +192,16 @@ class DiseaseSchema(Schema):
 
     URL_NPI_COVID_19_KEYSTONE = 'https://raw.githubusercontent.com/Keystone-Strategy/covid19-intervention-data/master/complete_npis_inherited_policies.csv'
 
+    def get_disease_id(self, name='COVID-19'):
+        ret = None
+        with self.dbi.conn.cursor() as c:
+            c.execute(f'SELECT id FROM {self.dbi.pg_schema_dis}.disease WHERE name = %s;', [name])
+            ret = c.fetchone()
+            if ret is None:
+                raise ETLError(f'Disease "{name}" does not exist.')
+            ret = ret[0]
+        return ret
+
     def load_disease(self, disease):
         {
             'COVID-19' : self.load_covid_19,
@@ -205,6 +218,56 @@ class DiseaseSchema(Schema):
 
         self.load_covid_19_dyn(disease_id)
         self.load_covid_19_npi(disease_id)
+
+    def load_covid_19_clinical(self, state='-', actnow_api_key=None):
+        disease_id = self.get_disease_id()
+        self.load_covid_19_clinical_actnow(disease_id, state, actnow_api_key)
+
+    def load_covid_19_clinical_actnow(self, disease_id, state='-', api_key=None):
+        fpath = os.path.join(self.fsi.dpath_data, 'dis', 'counties.timeseries.csv')
+
+        # (1) Extract:
+        # Download:
+        if not os.path.isfile(fpath):
+            if api_key is None or len(api_key) == 0:
+                print('Counties time series file not found and empty API key provided; aborting.')
+                return
+
+            print(f'Downloading...', end='', flush=True)
+            t0 = time.perf_counter()
+            urllib.request.urlretrieve(f'https://api.covidactnow.org/v2/counties.timeseries.csv?apiKey={api_key}', fpath)
+            print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
+        else:
+            print(f'Using existing file: {fpath}')
+
+        # Convert to list:
+        with open(fpath, newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            if state == '-':
+                rows = [[None if c == '' else c for c in r] for r in reader]
+            else:
+                rows = [[None if c == '' else c for c in r] for r in reader if r[2] == state]
+
+        # (2) Transform:
+        print(f'Processing...', end='', flush=True)
+        t0 = time.perf_counter()
+
+        # (2.1) Get 'locale_id' for every row:
+        with self.dbi.conn.cursor() as c:
+            for r in rows:
+                c.execute(f"SELECT id FROM {self.dbi.pg_schema_main}.locale WHERE fips = %s;", [r[4]])
+                locale_id = c.fetchone()
+                r.insert(0, locale_id[0] if locale_id is not None else None)
+        rows = [r for r in rows if r[0] is not None]
+
+        # (3) Load:
+        qry_set = '=%s,'.join(['case_density', 'r0', 'r0_ci90', 'test_n_pos', 'test_n_neg', 'test_r_pos', 'beds_hosp_cap', 'beds_hosp_usage_tot', 'beds_hosp_usage_covid', 'beds_icu_cap', 'beds_icu_usage_tot', 'beds_icu_usage_covid', 'vax_n_init', 'vax_n_done', 'vax_r_init', 'vax_r_done']) + '=%s'
+        qry = f'UPDATE {self.dbi.pg_schema_dis}.dyn SET {qry_set} WHERE disease_id = %s AND locale_id = %s AND day = %s;'
+        with self.dbi.conn.cursor() as c:
+            psycopg2.extras.execute_batch(c, qry, ((r[28], r[30], r[31], r[11], r[12], r[26], r[14], r[15], r[16], r[18], r[19], r[20], r[24], r[25], r[36], r[37], disease_id, r[0], r[1]) for r in rows))  # index +1 because of 'locale_id' added earlier
+        self.dbi.conn.commit()
+        print(f' done ({time.perf_counter() - t0:.0f} s; n={len(rows)})', flush=True)
 
     def load_covid_19_dyn(self, disease_id):
         print(f'Disease dynamics', flush=True)
@@ -230,6 +293,7 @@ class DiseaseSchema(Schema):
     def load_covid_19_dyn_ds(self, c, disease_id, url, col, col_human, is_glob, date_col_idx_0, page_size=1024):
         print(f'    Loading {"global" if is_glob else "US"} {col_human}...', end='', flush=True)
         t0 = time.perf_counter()
+        not_found_cnt = 0
 
         # (1) Extract:
         res = urllib.request.urlopen(url)
@@ -243,11 +307,12 @@ class DiseaseSchema(Schema):
         for (i,r) in enumerate(rows):
             if is_glob:
                 c.execute(f'SELECT id FROM {self.dbi.pg_schema_main}.locale WHERE admin0 IS NOT DISTINCT FROM %s AND admin1 IS NOT DISTINCT FROM %s AND admin2 IS NULL;', [r[1], r[0]])
-            else:                
+            else:
                 c.execute(f'SELECT id FROM {self.dbi.pg_schema_main}.locale WHERE id = %s;', [r[0]])
             locale_id = c.fetchone()
             if locale_id is None:
-                print(f'Locale not been found in the database: {r[:7]}')
+                # print(f'Locale not found in the database: {r[:7]}')
+                not_found_cnt += 1
                 continue
             locale_id = locale_id[0]
 
@@ -257,7 +322,7 @@ class DiseaseSchema(Schema):
                 ([disease_id, locale_id, header[j], j - date_col_idx_0 + 1, r[j], r[j], disease_id, locale_id, header[j]] for j in range(date_col_idx_0, len(r))),
                 page_size=page_size
             )
-        print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
+        print(f' done ({time.perf_counter() - t0:.0f} s; {not_found_cnt} not found)', flush=True)
 
     def load_covid_19_npi(self, disease_id):
         print(f'Non-pharmaceutical interventions', flush=True)
@@ -354,17 +419,6 @@ class MainSchema(Schema):
             )
         self.dbi.conn.commit()
         self.dbi.vacuum(f'{self.dbi.pg_schema_main}.locale')
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-class HealthSchema(Schema):
-    """Health factors and outcomes.
-
-    National Health Interview Survey (NHIS): https://www.cdc.gov/nchs/nhis/index.htm?CDC_AA_refVal=https%3A%2F%2Fwww.cdc.gov%2Fnchs%2Fnhis.htm
-    Behavioral Risk Factor Surveillance System (BRFSS): https://www.cdc.gov/brfss/
-    """
-
-    pass
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1095,6 +1149,7 @@ class WeatherSchema(Schema):
             c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_weather}.weather;')
             print(c.fetchone().n)
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 class MobilitySchema(Schema):
     """County mobility data is available here: https://data.bts.gov/api/views/w96p-f2qv/rows.csv?accessType=DOWNLOAD
@@ -1102,7 +1157,6 @@ class MobilitySchema(Schema):
     Data mirror: https://world-modelers.s3.amazonaws.com/data/Trips_by_Distance.csv
     (will become stale)
     """
-
 
     def add_zero(self, x):
         # For FIPS sans leading zero
@@ -1175,7 +1229,7 @@ class MobilitySchema(Schema):
         for col in cols:
             df[col]= df[col].astype(int)
 
-        renamed_cols = ['ts', 'fips','pop_home',
+        renamed_cols = ['dt', 'fips','pop_home',
                     'pop_mobile', 'n_trips',
                     'n_trips_lt_1', 'n_trips_1_3', 'n_trips_3_5',
                     'n_trips_5_10', 'n_trips_10_25',
@@ -1229,7 +1283,7 @@ class MobilitySchema(Schema):
         orig_na_sub = orig_na[['origin_admin0', 'origin_admin1']].rename(columns={'origin_admin0': 'admin0', 'origin_admin1': 'admin1'})
         dest_na_sub = dest_na[['dest_admin0', 'dest_admin1']].rename(columns={'dest_admin0': 'admin0', 'dest_admin1': 'admin1'})
         df_na = orig_na_sub.append(dest_na_sub)
-        df_na = df_na.drop_duplicates()   
+        df_na = df_na.drop_duplicates()
 
         # obtain future IDs...
         cur = self.dbi.conn.cursor()
@@ -1307,33 +1361,35 @@ class MobilitySchema(Schema):
             c.execute(f'SELECT COUNT(*) AS n FROM {self.dbi.pg_schema_mobility}.mobility;')
             print(c.fetchone().n)
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 class LocaleDB(object):
-    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, dpath_log, dpath_rt):
+    def __init__(self, pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility, dpath_data, dpath_log, dpath_rt):
         self.dbi = DBI(pg_host, pg_port, pg_usr, pg_pwd, pg_db, pg_schema_dis, pg_schema_geo, pg_schema_main, pg_schema_pop, pg_schema_vax, pg_schema_health, pg_schema_weather, pg_schema_mobility)
-        self.fsi = FSI(dpath_log, dpath_rt)
+        self.fsi = FSI(dpath_data, dpath_log, dpath_rt)
         self.engine = create_engine(f'postgresql://{pg_usr}:{pg_pwd}@{pg_host}:{pg_port}/{pg_db}')
 
     def get_dis(self):
         return DiseaseSchema(self.dbi, self.fsi)
 
+    def get_health(self):
+        return HealthSchema(self.dbi, self.fsi, self.engine)
+
     def get_main(self):
         return MainSchema(self.dbi, self.fsi)
+
+    def get_mobility(self):
+        return MobilitySchema(self.dbi, self.fsi, self.engine)
 
     def get_pop(self):
         return PopSchema(self.dbi, self.fsi)
 
-    def get_vax(self):
-        return VaxSchema(self.dbi, self.fsi, self.engine)
-
-    def get_health(self):
-        return HealthSchema(self.dbi, self.fsi, self.engine)
-
     def get_weather(self):
         return WeatherSchema(self.dbi, self.fsi, self.engine)
 
-    def get_mobility(self):
-        return MobilitySchema(self.dbi, self.fsi, self.engine)
+    def get_vax(self):
+        return VaxSchema(self.dbi, self.fsi, self.engine)
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -1341,36 +1397,39 @@ if __name__ == '__main__':
     # print(len(sys.argv[1:]))
     # sys.exit(0)
 
-    min_arg_length = 16
+    min_arg_length = 17
 
     if len(sys.argv[1:]) < min_arg_length:
         print(f'Incorrect number of arguments; at least ${min_arg_length} are required.')
         sys.exit(1)
 
-    if sys.argv[min_arg_length] == 'load-dis':
+    if sys.argv[min_arg_length] == 'load-health':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_health().load_health(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-air-traffic':
+        req_argn(min_arg_length+3)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_airtraffic(sys.argv[min_arg_length+1],sys.argv[min_arg_length+2],sys.argv[min_arg_length+3])
+    elif sys.argv[min_arg_length] == 'load-dis':
         req_argn(min_arg_length+1)
         LocaleDB(*sys.argv[1:min_arg_length]).get_dis().load_disease(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-clinic':
+        req_argn(min_arg_length+2)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_dis().load_covid_19_clinical(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])
     elif sys.argv[min_arg_length] == 'load-main':
         req_argn(min_arg_length)
         LocaleDB(*sys.argv[1:min_arg_length]).get_main().load_locales()
-    elif sys.argv[min_arg_length] == 'load-pop-state':
-        req_argn(min_arg_length+1)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_pop().load_state(sys.argv[min_arg_length+1])
-    elif sys.argv[min_arg_length] == 'load-vax':
-        req_argn(min_arg_length)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_vax().load_vax()
-    elif sys.argv[min_arg_length] == 'load-health':
-        req_argn(min_arg_length+1)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_health().load_health(sys.argv[min_arg_length+1])
-    elif sys.argv[min_arg_length] == 'load-weather':
-        req_argn(min_arg_length+2)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_weather().load_weather(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])
     elif sys.argv[min_arg_length] == 'load-mobility':
         req_argn(min_arg_length+1)
         LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_mobility(sys.argv[min_arg_length+1])
-    elif sys.argv[min_arg_length] == 'load-airtraffic':
-        req_argn(min_arg_length+3)
-        LocaleDB(*sys.argv[1:min_arg_length]).get_mobility().load_airtraffic(sys.argv[min_arg_length+1],sys.argv[min_arg_length+2],sys.argv[min_arg_length+3])
+    elif sys.argv[min_arg_length] == 'load-pop':
+        req_argn(min_arg_length+1)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_pop().load_state(sys.argv[min_arg_length+1])
+    elif sys.argv[min_arg_length] == 'load-weather':
+        req_argn(min_arg_length+2)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_weather().load_weather(sys.argv[min_arg_length+1], sys.argv[min_arg_length+2])
+    elif sys.argv[min_arg_length] == 'load-vax':
+        req_argn(min_arg_length)
+        LocaleDB(*sys.argv[1:min_arg_length]).get_vax().load_vax()
     else:
         print(f'Unknown command: {sys.argv[min_arg_length]}')
         sys.exit(1)

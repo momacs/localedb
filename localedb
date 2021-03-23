@@ -12,10 +12,12 @@
 # Contributors
 #     Tomek D Loboda; 2020.06.08 - present
 #         The original idea, design, and implementation; data import
-#     Scott Haleen; 2020.09.24 - present
-#         Design; docker mastery
 #     Brandon Rose; 2020.09.24 - present
-#         Design; data import
+#         Design feedback; data import
+#     Travis; 2020.11.02 - present
+#         Data import
+#     Scott Haleen; 2020.09.24 - 2020.12.01
+#         Dockerization; data import
 #
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -41,18 +43,21 @@ declare -t pg_conn_str=postgresql://${pg_usr}:${pg_pwd}@${pg_host}:${pg_port}/${
     # ?sslmode=require
 
 declare -r dir_root=/usr/share/localedb
-declare -r dir_data_dis=$dir_root/data/dis
-declare -r dir_data_geo=$dir_root/data/geo
-declare -r dir_data_pop=$dir_root/data/pop
-declare -r dir_data_vax=$dir_root/data/vax
-declare -r dir_data_health=$dir_root/data/health
-declare -r dir_data_weather=$dir_root/data/weather
-declare -r dir_data_mobility=$dir_root/data/mobility
 declare -r dir_bin=$dir_root/bin
+declare -r dir_data=$dir_root/data
+declare -r dir_data_dis=$dir_data/dis
+declare -r dir_data_geo=$dir_data/geo
+declare -r dir_data_health=$dir_data/health
+declare -r dir_data_mobility=$dir_data/mobility
+declare -r dir_data_pop=$dir_data/pop
+declare -r dir_data_weather=$dir_data/weather
+declare -r dir_data_vax=$dir_data/vax
 declare -r dir_log=$dir_root/log
-declare -r dir_rt=$dir_root/rt
 declare -r dir_pg_data=$dir_root/pg
+declare -r dir_rt=$dir_root/rt
 declare -r dir_schemas=$dir_root/schemas
+
+declare -r file_pg_dump=$dir_data/dumpfile
 
 declare -r self_name=$(basename $0)
 declare -r self_path=$(dirname $0)
@@ -62,9 +67,11 @@ declare -r usage="Usage: $self_name $cmd"
 declare -r cmd_dl="wget -q"
 declare -r cmd_dropdb="dropdb -h $pg_host -p $pg_port -U $pg_usr --if-exists $pg_db"
 declare -r cmd_createdb="createdb -h $pg_host -p $pg_port -U $pg_usr $pg_db"
+declare -r cmd_dump="pg_dump -h $pg_host -p $pg_port -U $pg_usr -c -Fc $pg_db > $file_pg_dump"
+declare -r cmd_restore="pg_restore -h $pg_host -p $pg_port -U $pg_usr -d $pg_db $file_pg_dump"
 declare -r cmd_pg_isready="pg_isready -t 60 -q -h $pg_host -p $pg_port -U $pg_usr"
 declare -r cmd_psql="psql $pg_conn_str -q"
-declare -r cmd_py="python3 $dir_bin/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $pg_schema_health $pg_schema_weather $pg_schema_mobility $dir_log $dir_rt"
+declare -r cmd_py="python3 $dir_bin/localedb_man.py $pg_host 5432 $pg_usr $pg_pwd $pg_db $pg_schema_dis $pg_schema_geo $pg_schema_main $pg_schema_pop $pg_schema_vax $pg_schema_health $pg_schema_weather $pg_schema_mobility $dir_data $dir_log $dir_rt"
 declare -r cmd_shp2pgsql="shp2pgsql -W latin1 -a -s 4269 $dir_rt"
 
 [ $is_verbose == 1 ] && declare -r out=" /dev/stdin" || declare -r out=" /dev/null"
@@ -286,8 +293,8 @@ proc_item_pop() {
 
     unzip -q $dir_data_pop/$fname.zip -d $dir_rt
 
-    #$cmd_py load-pop-state $3 > $out
-    $cmd_py load-pop-state $3
+    #$cmd_py load-pop $3 > $out
+    $cmd_py load-pop $3
 
     rm -fr $dir_rt/*
     echo -e "\r$1  done                                         "
@@ -297,7 +304,7 @@ proc_item_pop() {
 # ----------------------------------------------------------------------------------------------------------------------
 req_argn() { [ $1 -lt $2 ] && { echo "$usage $3"; exit 1; }; return 0; }
 req_cmd() { command -v $1 >/dev/null 2>&1 || { echo >&2 "Command $1 not found."; exit 1; }; return 0; }
-req_state_name() { [ "$1" != "-" ] && [[ ! " ${st_name[@]} " =~ " $1 " ]] && { echo >&2 "No state '$1' found."; exit 1; }; return 0; }
+req_state_name() { [ "$1" != "-" ] && [[ ! " ${st_name[@]} " =~ " $1 " ]] && { echo >&2 "Invalid state abbreviation: '$1'"; exit 1; }; return 0; }
 req_y() { read -p "$1 [y/n] " res; [ "$res" != "y" -a "$res" != "Y" ] && exit 1; return 0; }
 
 
@@ -314,29 +321,19 @@ case "$cmd" in
         ;;
     "db")
         case "$2" in
-            "conn")
-                $cmd_psql
-                ;;
+            "dump") eval $cmd_dump;;
+            "conn") eval $cmd_psql;;
             "exec")
                 req_argn $# 3 "$2 <sql-query>"
                 # TODO: if [[ "$3" =~ .*"INSERT".* ]]; then
                 $cmd_psql -t -c "$3"
                 ;;
-            "get-conn-str")
-                echo $pg_conn_str
-                ;;
-            "init")
-                db_init $3
-                ;;
-            "init-dis")
-                db_init_dis $3
-                ;;
-            "init-geo")
-                db_init_geo $3
-                ;;
-            "init-pop")
-                db_init_pop $3
-                ;;
+            "get-conn-str") echo $pg_conn_str;;
+            "init") db_init $3;;
+            "init-dis") db_init_dis $3;;
+            "init-geo") db_init_geo $3;;
+            "init-pop") db_init_pop $3;;
+            "restore") $cmd_restore;;
             "rm")
                 case "$3" in
                     "dis")
@@ -355,7 +352,7 @@ case "$cmd" in
                         db_analyze
                         ;;
                     "state")
-                        req_argn $# 4 "$2 $3 <state> [force?]"
+                        req_argn $# 4 "$2 $3 <two-letter state code> [force?]"
                         req_state_name $4
 
                         [ "$5" != "1" ] && req_y "Remove all data for $4?"
@@ -365,7 +362,7 @@ case "$cmd" in
                         db_analyze
                         ;;
                     "state-geo")
-                        req_argn $# 4 "$2 $3 <state> [force?]"
+                        req_argn $# 4 "$2 $3 <two-letter state code> [force?]"
                         req_state_name $4
 
                         [ "$5" != "1" ] && req_y "Remove geographic data for $4?"
@@ -381,7 +378,7 @@ case "$cmd" in
                         [ "$6" != "0" ] && db_analyze
                         ;;
                     "state-pop")
-                        req_argn $# 4 "$2 $3 <state> [force?]"
+                        req_argn $# 4 "$2 $3 <two-letter state code> [force?]"
                         req_state_name $4
 
                         [ "$5" != "1" ] && req_y "Remove population data for $4?"
@@ -400,13 +397,11 @@ case "$cmd" in
                         ;;
                     *) echo "$usage $2 $3{state state-geo state-pop}" && exit 1;;
                 esac;;
-            *) echo "$usage $2{conn exec get-conn-str init init-dis-dyn init-geo init-pop rm}" && exit 1;;
+            *) echo "$usage $2{conn dump exec get-conn-str init init-dis-dyn init-geo init-pop restore rm}" && exit 1;;
         esac;;
     "fs")
         case "$2" in
-            "clean")
-                [ -d $dir_rt ] && rm -fr $dir_rt/*
-                ;;
+            "clean") [ -d $dir_rt ] && rm -fr $dir_rt/*;;
             "rm-data")
                 case "$3" in
                     "all")
@@ -440,36 +435,26 @@ case "$cmd" in
         ;;
     "load")
         case "$2" in
+            "air-traffic")
+                req_argn $# 3 "$2 <year>"
+                req_argn $# 4 "$2 <two-letter state code or - for all> [force?]"
+                req_argn $# 5 "$2 <minimum passengers per flight>"
+                $cmd_py load-air-traffic $3 $4 $5
+                ;;
+            "clinic")
+                req_argn $# 3 "$2 <state or - for all> [Covid ActNow API key]"
+                req_state_name $3
+
+                $cmd_py load-clinic $3 "$4"
+                ;;
             "dis")
                 req_argn $# 3 "$2 <COVID-19|H1N1>"
                 [ "$3" != "COVID-19" ] && echo "Invalid disease: $3" && exit 1
 
                 $cmd_py load-dis $3
                 ;;
-            "vax")
-                $cmd_py load-vax
-                ;;
-            "health")
-                req_argn $# 3 "$2 <state or - for all> [force?]"
-                $cmd_py load-health $3
-                ;;                
-            "weather")
-                req_argn $# 3 "$2 <start year>"
-                req_argn $# 4 "$2 <stop year>"
-                $cmd_py load-weather $3 $4
-                ;;                                
-            "mobility")
-                req_argn $# 3 "$2 <state or - for all> [force?]"
-                $cmd_py load-mobility $3
-                ;;
-            "airtraffic")
-                req_argn $# 3 "$2 <year>"
-                req_argn $# 4 "$2 <state or - for all> [force?]"
-                req_argn $# 5 "$2 <minimum passengers per flight>"
-                $cmd_py load-airtraffic $3 $4 $5
-                ;;                                
             "geo")
-                req_argn $# 3 "$2 <state or - for all> [force?]"
+                req_argn $# 3 "$2 <two-letter state code or - for all> [force?]"
                 req_state_name $3
 
                 if [ "$3" == "-" ]; then
@@ -498,6 +483,14 @@ case "$cmd" in
 
                 db_analyze
                 ;;
+            "health")
+                req_argn $# 3 "$2 <two-letter state code or - for all> [force?]"
+                $cmd_py load-health $3
+                ;;
+            "mobility")
+                req_argn $# 3 "$2 <two-letter state code or - for all> [force?]"
+                $cmd_py load-mobility $3
+                ;;
             "pop")
                 req_argn $# 3 "$2 <two-letter state code or - for all> [force?]"
                 req_state_name $3
@@ -518,7 +511,13 @@ case "$cmd" in
 
                 db_analyze
                 ;;
-            *) echo "$usage $2{dis-dyn geo pop}" && exit 1;;
+            "weather")
+                req_argn $# 3 "$2 <start year>"
+                req_argn $# 4 "$2 <stop year>"
+                $cmd_py load-weather $3 $4
+                ;;
+            "vax") $cmd_py load-vax;;
+            *) echo "$usage $2{act-now air-traffic clinic dis geo health mobility pop weather vax}" && exit 1;;
         esac;;
     "info")
         case "$2" in
@@ -615,7 +614,7 @@ case "$cmd" in
                 ")
                 echo "        Date range     "$($cmd_psql -t -c "
                     SELECT CONCAT(MIN(TS), ' - ', MAX(TS)) FROM $pg_schema_mobility.airtraffic;
-                ")                                                                                
+                ")
                 echo "    Geographic"
                 echo "        States        "$(get_tbl_rec_cnt $pg_schema_geo st)
                 echo "        Counties      "$(get_tbl_rec_cnt $pg_schema_geo co)
@@ -643,25 +642,25 @@ case "$cmd" in
                 ;;
             "fs")
                 echo "Directory structure"
-                echo "    Root               $dir_root              $(du -sh $dir_root | awk 'END {print $1}')"
-                echo "    Runtime            $dir_rt      $(du -sh $dir_rt | awk 'END {print $1}')"
-                echo "    Log                $dir_log     $(du -sh $dir_log | awk 'END {print $1}')"
-                echo "    Disease data       $dir_data_dis  $(du -sh $dir_data_dis | awk 'END {print $1}')"
-                echo "    Geographic data    $dir_data_geo  $(du -sh $dir_data_geo | awk 'END {print $1}')"
-                echo "    Population data    $dir_data_pop  $(du -sh $dir_data_pop | awk 'END {print $1}')"
+                echo "    Root               $dir_root           $(du -sh $dir_root     | awk 'END {print $1}')"
+                echo "    Data: Disease      $dir_data_dis  $(du -sh $dir_data_dis | awk 'END {print $1}')"
+                echo "    Data: Geographic   $dir_data_geo  $(du -sh $dir_data_geo | awk 'END {print $1}')"
+                echo "    Data: Population   $dir_data_pop  $(du -sh $dir_data_pop | awk 'END {print $1}')"
+                echo "    Log                $dir_log       $(du -sh $dir_log      | awk 'END {print $1}')"
+                echo "    Runtime            $dir_rt        $(du -sh $dir_rt       | awk 'END {print $1}')"
                 ;;
             *) echo "$usage $2{all data db fs}" && exit 1;;
         esac;;
     "setup")
         mkdir -p $dir_root
+        mkdir -p $dir_bin
         mkdir -p $dir_data_dis
         mkdir -p $dir_data_geo
-        mkdir -p $dir_data_pop
-        mkdir -p $dir_data_vax
         mkdir -p $dir_data_health
-        mkdir -p $dir_data_weather
         mkdir -p $dir_data_mobility
-        mkdir -p $dir_bin
+        mkdir -p $dir_data_pop
+        mkdir -p $dir_data_weather
+        mkdir -p $dir_data_vax
         mkdir -p $dir_log
         mkdir -p $dir_rt
 
