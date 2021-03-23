@@ -436,9 +436,7 @@ case "$cmd" in
     "load")
         case "$2" in
             "air-traffic")
-                req_argn $# 3 "$2 <year>"
-                req_argn $# 4 "$2 <two-letter state code or - for all> [force?]"
-                req_argn $# 5 "$2 <minimum passengers per flight>"
+                req_argn $# 5 "$2 <year> <two-letter state code or - for all> <minimum passengers per flight>"
                 $cmd_py load-air-traffic $3 $4 $5
                 ;;
             "clinic")
