@@ -6,12 +6,12 @@ CREATE SCHEMA $PG_SCHEMA_WEATHER;
 
 CREATE TABLE $PG_SCHEMA_WEATHER.weather (
 locale_id INTEGER NOT NULL REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
-year      INTEGER NOT NULL,
-month     INTEGER NOT NULL,
-tmin      DECIMAL,
-tavg      DECIMAL,
-tmax      DECIMAL,
-precip    DECIMAL
+year      SMALLINT NOT NULL,
+month     SMALLINT NOT NULL,
+tmin      FLOAT4,
+tavg      FLOAT4,
+tmax      FLOAT4,
+precip    FLOAT4
 );
 
 COMMIT;

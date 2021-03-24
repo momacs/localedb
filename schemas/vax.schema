@@ -7,8 +7,8 @@ CREATE SCHEMA $PG_SCHEMA_VAX;
 CREATE TABLE $PG_SCHEMA_VAX.age (
 id           INTEGER PRIMARY KEY,
 name         TEXT NOT NULL,
-age_0        DECIMAL(3,1) NOT NULL,
-age_1        DECIMAL(3,1),
+age_0        FLOAT4 NOT NULL,
+age_1        FLOAT4,
 is_high_risk BOOLEAN NOT NULL
 );
 
@@ -19,16 +19,16 @@ name TEXT NOT NULL
 
 CREATE TABLE $PG_SCHEMA_VAX.vax (
 locale_id  INTEGER NOT NULL REFERENCES $PG_SCHEMA_MAIN.locale (id) ON DELETE CASCADE ON UPDATE CASCADE,
-coverage   DECIMAL,
-ll         DECIMAL,
-ul         DECIMAL,
-ci         DECIMAL,
+coverage   FLOAT4,
+ll         FLOAT4,
+ul         FLOAT4,
+ci         FLOAT4,
 sample     INTEGER,
-target     DECIMAL,
+target     SMALLINT,
 age_id     INTEGER REFERENCES $PG_SCHEMA_VAX.age (id) ON DELETE CASCADE ON UPDATE CASCADE,
 race_id    INTEGER REFERENCES $PG_SCHEMA_VAX.race (id) ON DELETE CASCADE ON UPDATE CASCADE,
-start_year INTEGER NOT NULL,
-end_year   INTEGER NOT NULL
+start_year SMALLINT NOT NULL,
+end_year   SMALLINT NOT NULL
 );
 
 /* The below commented out statement may not make sense given that start_year is an integer */

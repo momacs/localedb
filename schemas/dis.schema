@@ -17,12 +17,12 @@ day_i                 SMALLINT NOT NULL,  -- day from the beginning of data coll
 n_conf                INTEGER,            -- number of confirmed cases                             [Johns Hopkins University]
 n_dead                INTEGER,            -- number of deaths                                      [Johns Hopkins University]
 n_rec                 INTEGER,            -- number of recovered cases                             [Johns Hopkins University]
-case_density          FLOAT,              -- number of cases per 100k; 7-day rolling average       [Covid ActNow]
-r0                    FLOAT,              -- the basic reproduction number                         [Covid ActNow]
-r0_ci90               FLOAT,              -- the basic reproduction number 90% confidence interval [Covid ActNow]
+case_density          FLOAT8,             -- number of cases per 100k; 7-day rolling average       [Covid ActNow]
+r0                    FLOAT8,             -- the basic reproduction number                         [Covid ActNow]
+r0_ci90               FLOAT8,             -- the basic reproduction number 90% confidence interval [Covid ActNow]
 test_n_pos            INTEGER,            -- number of positive tests                              [Covid ActNow]
 test_n_neg            INTEGER,            -- number of negative tests                              [Covid ActNow]
-test_r_pos            FLOAT,              -- ratio  of positive tests                              [Covid ActNow]
+test_r_pos            FLOAT8,             -- ratio  of positive tests                              [Covid ActNow]
 beds_hosp_cap         INTEGER,            -- number of hospital beds: capacity                     [Covid ActNow]
 beds_hosp_usage_tot   INTEGER,            -- number of hospital beds: total usage                  [Covid ActNow]
 beds_hosp_usage_covid INTEGER,            -- number of hospital beds: Covid usage                  [Covid ActNow]
@@ -31,8 +31,8 @@ beds_icu_usage_tot    INTEGER,            -- number of ICU      beds: total usag
 beds_icu_usage_covid  INTEGER,            -- number of ICU      beds: Covid usage                  [Covid ActNow]
 vax_n_init            INTEGER,            -- number of vaccinations initiated                      [Covid ActNow]
 vax_n_done            INTEGER,            -- number of vaccinations completed                      [Covid ActNow]
-vax_r_init            FLOAT,              -- ratio  of vaccinations initiated (per locale capita)  [Covid ActNow]
-vax_r_done            FLOAT,              -- ratio  of vaccinations completed (per locale capita)  [Covid ActNow]
+vax_r_init            FLOAT8,             -- ratio  of vaccinations initiated (per locale capita)  [Covid ActNow]
+vax_r_done            FLOAT8,             -- ratio  of vaccinations completed (per locale capita)  [Covid ActNow]
 PRIMARY KEY (disease_id, locale_id, day)  -- https://github.com/timescale/timescaledb/issues/113
 );
 
