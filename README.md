@@ -76,7 +76,7 @@ Then:
 ./build-docker.sh
 
 # Create volumes dir:
-mkdir -p .localedb; for d in "data log pg rt"; do mkdir -p ./localedb/$d; done
+mkdir -p .localedb; for d in data log pg rt; do mkdir -p ./localedb/$d; done
 
 # Start the container (takes about a minute for Postgres to become available):
 docker-compose up -d
