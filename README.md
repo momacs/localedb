@@ -10,7 +10,7 @@ Many models of COVID-19 have been proposed to date.  When compared against each 
 
 ## Design
 
-As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extensions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The database can be accessed either via a PostgreSQL driver or a language-specific binding which provide a high level API to, for example, suggest U.S. counties similar to the county specified.  To that effect, we are currently working on [Python](https://github.com/momacs/localedb-py) bindings.
+As shown on the figure below, LocaleDB stores several types of data (gray boxes indicate planned future extensions).  That data is stored in a PostgreSQL database which is managed by a command line tool ([`localedb`](localedb)) and a Python script ([`localedb_man.py`](localedb_man.py)).  The database can be accessed either via a PostgreSQL driver or a language-specific binding which provide a high level API.  At this point, we provide [Python bindings package](https://github.com/momacs/localedb-py).
 
 <center><img height="526" alt="portfolio_view" src="https://raw.githubusercontent.com/momacs/localedb/master/media/design.png" /></center>
 
