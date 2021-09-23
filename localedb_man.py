@@ -232,17 +232,27 @@ class DiseaseSchema(Schema):
 
         # (1) Extract:
         # Download:
-        if not os.path.isfile(fpath):
-            if api_key is None or len(api_key) == 0:
-                print('Counties time series file not found and empty API key provided; aborting.')
-                return
+        if api_key is None or len(api_key) == 0:
+            print('Counties time series file not found and empty API key provided; aborting.')
+            return
 
-            print(f'Downloading...', end='', flush=True)
-            t0 = time.perf_counter()
-            urllib.request.urlretrieve(f'https://api.covidactnow.org/v2/counties.timeseries.csv?apiKey={api_key}', fpath)
-            print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
-        else:
-            print(f'Using existing file: {fpath}')
+        print(f'Downloading...', end='', flush=True)
+        t0 = time.perf_counter()
+        urllib.request.urlretrieve(f'https://api.covidactnow.org/v2/counties.timeseries.csv?apiKey={api_key}', fpath)
+        print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
+
+        # disabling using previously downloaded file for now (should add a 'do_force_download' arg):
+        # if not os.path.isfile(fpath):
+        #     if api_key is None or len(api_key) == 0:
+        #         print('Counties time series file not found and empty API key provided; aborting.')
+        #         return
+        #
+        #     print(f'Downloading...', end='', flush=True)
+        #     t0 = time.perf_counter()
+        #     urllib.request.urlretrieve(f'https://api.covidactnow.org/v2/counties.timeseries.csv?apiKey={api_key}', fpath)
+        #     print(f' done ({time.perf_counter() - t0:.0f} s)', flush=True)
+        # else:
+        #     print(f'Using existing file: {fpath}')
 
         # Convert to list:
         with open(fpath, newline='') as f:
@@ -447,10 +457,10 @@ class PopSchema(Schema):
     '''
 
     COUNTY_TXT_FILES = [
-        CountyTxtFile('schools.txt',    'school',    (False, re.compile(r'^\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')),           f"COPY tmp_school    (id, stco, lat, long)                                       FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
+        CountyTxtFile('schools.txt',    'school',    (False, re.compile(r'^\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')),           f"COPY tmp_school    (id, stco, lat, long)                                                     FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
         CountyTxtFile('hospitals.txt',  'hospital',  (True,  re.compile(r'^\d+\t\d+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_hospital  (id, worker_cnt, physician_cnt, bed_cnt, lat, long)                       FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
-        CountyTxtFile('households.txt', 'household', (False, re.compile(r'^\d+\t\d+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_household (id, stcotrbg, race_id, income, lat, long)                  FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
-        CountyTxtFile('gq.txt',         'gq',        (False, re.compile(r'^\d+\t\w+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_gq        (id, type, stcotrbg, person_cnt, lat, long)                 FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
+        CountyTxtFile('households.txt', 'household', (False, re.compile(r'^\d+\t\d+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_household (id, stcotrbg, race_id, income, lat, long)                                FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
+        CountyTxtFile('gq.txt',         'gq',        (False, re.compile(r'^\d+\t\w+\t\d+\t\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')), f"COPY tmp_gq        (id, type, stcotrbg, person_cnt, lat, long)                               FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
         CountyTxtFile('workplaces.txt', 'workplace', (False, re.compile(r'^\d+\t-?[0-9]+\.[0-9]+\t-?[0-9]+\.[0-9]+$')),                f"COPY tmp_workplace (id, lat, long)                                                           FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", True),
         CountyTxtFile('people.txt',     'person',    (False, re.compile(r'^\d+\t\d+\t\d+\t[FM]\t\d+\t\d+\t(?:\d+|X)\t(?:\d+|X)$')),    f"COPY tmp_person    (id, household_id, age, sex, race_id, relate_id, school_id, workplace_id) FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", False),
         CountyTxtFile('gq_people.txt',  'gq_person', (False, re.compile(r'^\d+\t\d+\t\d+\t[FM]$')),                                    f"COPY tmp_gq_person (id, gq_id, age, sex)                                                     FROM stdin WITH CSV DELIMITER AS '\t' NULL AS '{NA}';", False)
